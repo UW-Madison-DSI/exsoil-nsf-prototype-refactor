@@ -1,4 +1,4 @@
-# ncar-nsf-neon
+# exsoil-nsf-prototype-refactor
 
 Containerized JupyterLab environment for NCAR / NSF / NEON work, built on top of
 [`escomp/cesm-lab-neon`](https://hub.docker.com/r/escomp/cesm-lab-neon). Ships
@@ -7,7 +7,7 @@ with a GitHub Actions workflow that publishes the image to GHCR on every push.
 
 ## Published image
 
-`ghcr.io/mariaob1201/ncar-nsf-neon`
+`ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor`
 
 Tags produced by CI:
 
@@ -24,7 +24,7 @@ Tags produced by CI:
 ### Pull and run the published image
 
 ```bash
-docker run --rm -p 8888:8888 ghcr.io/mariaob1201/ncar-nsf-neon:latest
+docker run --rm -p 8888:8888 ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
 ```
 
 Then open <http://127.0.0.1:8888/lab>. The base image ships with JupyterLab
@@ -52,7 +52,7 @@ amd64-only, so the container runs through Rosetta emulation.
 ```bash
 docker run --rm -p 8888:8888 \
   -v "$PWD/notebooks:/home/user/notebooks" \
-  ghcr.io/mariaob1201/ncar-nsf-neon:latest
+  ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
 ```
 
 ## Project layout

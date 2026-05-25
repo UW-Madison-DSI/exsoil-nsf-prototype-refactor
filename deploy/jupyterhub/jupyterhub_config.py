@@ -15,7 +15,7 @@ c.JupyterHub.spawner_class = "dockerspawner.DockerSpawner"
 
 c.DockerSpawner.image = os.environ.get(
     "DOCKER_SPAWN_IMAGE",
-    "ghcr.io/mariaob1201/ncar-nsf-neon:latest",
+    "ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest",
 )
 
 # Shared Docker network for Hub <-> user containers

@@ -1,11 +1,11 @@
-name: ncar-nsf-neon-hub
+name: exsoil-nsf-hub
 
 services:
   jupyterhub:
     build:
       context: .
       dockerfile: Dockerfile.hub
-    image: ncar-nsf-neon-hub:latest
+    image: exsoil-nsf-hub:latest
     container_name: jupyterhub
     restart: unless-stopped
     networks:
@@ -18,15 +18,15 @@ services:
       - hub_data:/srv/jupyterhub
       - ./jupyterhub_config.py:/srv/jupyterhub/jupyterhub_config.py:ro
     environment:
-      DOCKER_NETWORK_NAME: ncar-nsf-neon-hub_hub
-      DOCKER_SPAWN_IMAGE: ${DOCKER_SPAWN_IMAGE:-ghcr.io/mariaob1201/ncar-nsf-neon:latest}
+      DOCKER_NETWORK_NAME: exsoil-nsf-hub_hub
+      DOCKER_SPAWN_IMAGE: ${DOCKER_SPAWN_IMAGE:-ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest}
       JUPYTERHUB_ADMIN_USERS: ${JUPYTERHUB_ADMIN_USERS:-admin}
       JUPYTERHUB_MEM_LIMIT: ${JUPYTERHUB_MEM_LIMIT:-4G}
       JUPYTERHUB_CPU_LIMIT: ${JUPYTERHUB_CPU_LIMIT:-2}
 
 networks:
   hub:
-    name: ncar-nsf-neon-hub_hub
+    name: exsoil-nsf-hub_hub
 
 volumes:
   hub_data:

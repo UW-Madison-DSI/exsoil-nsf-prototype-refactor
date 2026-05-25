@@ -1,7 +1,7 @@
-# JupyterHub deployment for ncar-nsf-neon
+# JupyterHub deployment for exsoil-nsf-prototype-refactor
 
 Multi-user JupyterLab with password authentication. JupyterHub handles login
-and spawns a fresh [`ghcr.io/mariaob1201/ncar-nsf-neon`](https://github.com/mariaob1201/ncar-nsf-neon/pkgs/container/ncar-nsf-neon)
+and spawns a fresh [`ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor`](https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/pkgs/container/exsoil-nsf-prototype-refactor)
 container for each logged-in user with its own persistent home directory.
 
 ```
@@ -28,8 +28,8 @@ container for each logged-in user with its own persistent home directory.
 
 ```bash
 # On the VM:
-git clone https://github.com/mariaob1201/ncar-nsf-neon.git
-cd ncar-nsf-neon/deploy/jupyterhub
+git clone https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor.git
+cd exsoil-nsf-prototype-refactor/deploy/jupyterhub
 
 cp .env.example .env
 # Edit .env: set JUPYTERHUB_ADMIN_USERS to your username
@@ -39,7 +39,7 @@ docker compose up -d --build
 
 That's it. Open `http://<vm-ip>:8000` in a browser:
 1. Click **Signup** and create your admin user (the username must match `JUPYTERHUB_ADMIN_USERS`).
-2. Log in. Your `ghcr.io/mariaob1201/ncar-nsf-neon` container will spawn — give it 30-60s on first run.
+2. Log in. Your `ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor` container will spawn — give it 30-60s on first run.
 3. To invite teammates, send them the URL. They sign up, then you approve them at `/hub/authorize`.
 
 ## Production (HTTPS via Caddy, recommended)
@@ -71,7 +71,7 @@ docker compose down
 docker compose down -v
 
 # Pull a newer cesm-lab-neon image (users get it on next login)
-docker pull ghcr.io/mariaob1201/ncar-nsf-neon:latest
+docker pull ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
 
 # See running user containers
 docker ps --filter "label=jupyterhub.user.name"
