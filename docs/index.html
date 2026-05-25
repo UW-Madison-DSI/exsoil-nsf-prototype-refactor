@@ -3,155 +3,307 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>exsoil-nsf-prototype-refactor — CTSM + NEON analysis environment</title>
-  <meta name="description" content="A containerized JupyterLab environment for running and analyzing CTSM (Community Terrestrial Systems Model) simulations against NEON observational data." />
+  <title>ExSoil — CTSM + NEON Analysis Environment · UW–Madison Data Science Institute</title>
+  <meta name="description" content="A containerized JupyterLab environment for running and analyzing CTSM simulations against NEON observational data. Developed at the University of Wisconsin–Madison Data Science Institute." />
+  <link rel="icon" type="image/png" href="logo/uw-logo-horizontal-color-web-digital.png" />
 
   <!-- ⚠️ EDIT THIS ONE LINE once your JupyterHub is deployed -->
-  <!-- e.g. <a id="launch-btn" href="https://hub.example.com">Launch the Tool →</a> -->
   <script>window.HUB_URL = "https://hub.example.com"; // ← replace with your real hub URL</script>
 
   <style>
     :root {
-      --bg:        #fafaf8;
-      --fg:        #1f2328;
-      --muted:    #57606a;
-      --accent:   #0a6e3c;
-      --accent2:  #084d28;
-      --border:   #d0d7de;
-      --card:     #ffffff;
-      --code-bg:  #f6f8fa;
+      --uw-red:        #C5050C;   /* UW Madison Badger Red (primary) */
+      --uw-red-dark:   #9B040A;
+      --uw-gold:       #FFCD00;   /* Anniversary Gold (accent) */
+      --uw-gold-light: #FFE082;
+      --ink:           #1F2024;
+      --ink-soft:      #4A4F55;
+      --muted:         #6E737A;
+      --bg:            #FAFAF8;
+      --card:          #FFFFFF;
+      --border:        #D9D9D6;
+      --code-bg:       #F4F4F1;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Red Hat Text", Helvetica, Arial, sans-serif;
+      color: var(--ink);
       background: var(--bg);
       line-height: 1.55;
     }
-    .container { max-width: 880px; margin: 0 auto; padding: 0 24px; }
-    header {
-      padding: 56px 0 32px;
-      border-bottom: 1px solid var(--border);
-      background: linear-gradient(180deg, #fff 0%, var(--bg) 100%);
+    a { color: var(--uw-red); }
+    a:hover { color: var(--uw-red-dark); }
+
+    /* ============== Institutional top bar ============== */
+    .topbar {
+      background: #ffffff;
+      border-bottom: 4px solid var(--uw-red);
     }
-    header h1 { margin: 0 0 12px; font-size: 2.25rem; letter-spacing: -0.5px; }
-    header p.tagline { margin: 0 0 28px; font-size: 1.15rem; color: var(--muted); max-width: 640px; }
+    .topbar .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 28px;
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+    .topbar img.uw-logo {
+      height: 44px;
+      width: auto;
+      display: block;
+    }
+    .topbar nav a {
+      color: var(--ink-soft);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      margin-left: 24px;
+    }
+    .topbar nav a:hover { color: var(--uw-red); }
+
+    /* ============== Hero ============== */
+    .hero {
+      background:
+        linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+      padding: 56px 0 48px;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero .container { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+    .hero .eyebrow {
+      display: inline-block;
+      color: var(--uw-red);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin: 0 0 14px;
+      padding: 4px 10px;
+      background: rgba(197, 5, 12, 0.08);
+      border-radius: 4px;
+    }
+    .hero h1 {
+      margin: 0 0 14px;
+      font-size: 2.4rem;
+      line-height: 1.15;
+      letter-spacing: -0.5px;
+      color: var(--ink);
+      max-width: 760px;
+    }
+    .hero .tagline {
+      margin: 0 0 28px;
+      font-size: 1.15rem;
+      color: var(--ink-soft);
+      max-width: 760px;
+    }
+
+    .cta-row { margin-top: 8px; }
     .cta {
       display: inline-block;
-      background: var(--accent);
+      background: var(--uw-red);
       color: #fff;
       text-decoration: none;
       padding: 14px 28px;
-      border-radius: 8px;
+      border-radius: 6px;
       font-weight: 600;
       font-size: 1.05rem;
-      transition: background 0.15s;
-      border: none;
-      cursor: pointer;
+      transition: background 0.15s, transform 0.05s;
+      border: 2px solid var(--uw-red);
     }
-    .cta:hover { background: var(--accent2); }
+    .cta:hover { background: var(--uw-red-dark); border-color: var(--uw-red-dark); color: #fff; }
+    .cta:active { transform: translateY(1px); }
     .cta.secondary {
       background: transparent;
-      color: var(--accent);
-      border: 1.5px solid var(--accent);
+      color: var(--uw-red);
+      border: 2px solid var(--uw-red);
       margin-left: 12px;
     }
-    .cta.secondary:hover { background: var(--accent); color: #fff; }
-    main { padding: 40px 0 80px; }
-    section { margin-bottom: 48px; }
-    section h2 {
-      margin: 0 0 16px;
-      font-size: 1.4rem;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--border);
+    .cta.secondary:hover { background: var(--uw-red); color: #fff; }
+
+    .notice {
+      background: #FFF7DC;
+      border-left: 4px solid var(--uw-gold);
+      border-radius: 4px;
+      padding: 12px 18px;
+      margin: 22px 0 0;
+      font-size: 0.95rem;
+      color: var(--ink-soft);
+      max-width: 760px;
     }
-    section p { margin: 0 0 14px; }
+
+    /* ============== Main content ============== */
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 56px 28px 80px;
+    }
+    section { margin-bottom: 56px; }
+    section h2 {
+      margin: 0 0 20px;
+      font-size: 1.45rem;
+      color: var(--ink);
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--uw-red);
+      display: inline-block;
+    }
+    section p { margin: 0 0 14px; color: var(--ink-soft); max-width: 760px; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+      margin-top: 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-top: 3px solid var(--uw-red);
+      border-radius: 6px;
+      padding: 22px 24px;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(31, 32, 36, 0.08);
+    }
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 1.05rem;
+      color: var(--ink);
+    }
+    .card p { font-size: 0.95rem; color: var(--ink-soft); margin: 0; }
+
+    /* ============== Code ============== */
     code, pre {
       font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
       font-size: 0.9rem;
     }
-    code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; }
+    code {
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--ink);
+    }
     pre {
       background: var(--code-bg);
-      padding: 14px 18px;
-      border-radius: 8px;
+      padding: 16px 20px;
+      border-radius: 6px;
       overflow-x: auto;
       border: 1px solid var(--border);
+      max-width: 760px;
     }
     pre code { background: none; padding: 0; }
-    ul { padding-left: 22px; }
-    li { margin-bottom: 6px; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 18px 20px;
-    }
-    .card h3 { margin: 0 0 6px; font-size: 1.05rem; }
-    .card p { font-size: 0.92rem; color: var(--muted); margin: 0; }
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 24px 0;
-      color: var(--muted);
-      font-size: 0.9rem;
-    }
-    footer a { color: var(--muted); }
+
+    /* ============== Badges ============== */
     .badge {
       display: inline-block;
-      background: var(--code-bg);
-      color: var(--muted);
+      background: #fff;
+      color: var(--ink-soft);
       border: 1px solid var(--border);
-      padding: 2px 10px;
+      padding: 3px 12px;
       border-radius: 999px;
-      font-size: 0.8rem;
-      margin-right: 6px;
+      font-size: 0.82rem;
+      margin: 0 6px 8px 0;
     }
-    .notice {
-      background: #fff8e6;
-      border: 1px solid #d4a72c;
-      border-radius: 8px;
-      padding: 12px 16px;
-      margin: 12px 0;
+
+    /* ============== Footer ============== */
+    footer {
+      background: #1A1B1F;
+      color: #BFC3C8;
+      border-top: 4px solid var(--uw-red);
+      padding: 36px 28px 28px;
+      font-size: 0.9rem;
+    }
+    footer .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 36px;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+    footer h4 {
+      margin: 0 0 10px;
+      color: #fff;
       font-size: 0.95rem;
+      letter-spacing: 0.04em;
+    }
+    footer a { color: #E0E3E7; text-decoration: none; }
+    footer a:hover { color: var(--uw-gold); text-decoration: underline; }
+    footer ul { list-style: none; padding: 0; margin: 0; }
+    footer li { margin-bottom: 6px; }
+    footer .legal {
+      width: 100%;
+      border-top: 1px solid #2E3036;
+      padding-top: 16px;
+      margin-top: 20px;
+      color: #8C9097;
+      font-size: 0.82rem;
+    }
+
+    @media (max-width: 640px) {
+      .topbar .container { flex-direction: column; gap: 10px; padding: 14px 20px; }
+      .topbar nav a { margin: 0 8px; }
+      .hero h1 { font-size: 1.85rem; }
+      .cta.secondary { margin-left: 0; margin-top: 10px; }
     }
   </style>
 </head>
 <body>
 
-<header>
+<!-- =================== Institutional top bar =================== -->
+<div class="topbar">
   <div class="container">
-    <h1>exsoil-nsf-prototype-refactor</h1>
+    <a href="https://www.wisc.edu/" target="_blank" rel="noopener" aria-label="University of Wisconsin–Madison">
+      <img class="uw-logo" src="logo/uw-logo-horizontal-color-web-digital.png" alt="University of Wisconsin–Madison" />
+    </a>
+    <nav>
+      <a href="#about">About</a>
+      <a href="#access">Access</a>
+      <a href="#stack">Stack</a>
+      <a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor" target="_blank" rel="noopener">GitHub ↗</a>
+    </nav>
+  </div>
+</div>
+
+<!-- =================== Hero =================== -->
+<section class="hero">
+  <div class="container">
+    <span class="eyebrow">UW–Madison Data Science Institute · NSF Prototype</span>
+    <h1>ExSoil: CTSM + NEON Analysis Environment</h1>
     <p class="tagline">
-      A containerized JupyterLab environment for running
-      <strong>CTSM (Community Terrestrial Systems Model)</strong> simulations
-      against <strong>NEON</strong> observational data — with built-in
-      Kalman-filter calibration, PFT perturbation experiments, and S3-backed
-      forcing pipelines.
+      A containerized JupyterLab platform for running NCAR's
+      <strong>Community Terrestrial Systems Model (CTSM)</strong> against
+      <strong>NEON</strong> tower observations — with built-in Kalman-filter
+      calibration, plant-functional-type perturbation experiments, and
+      S3-backed forcing pipelines.
     </p>
 
-    <a id="launch-btn" class="cta" href="#" target="_blank" rel="noopener">Launch the Tool →</a>
-    <a class="cta secondary" href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor" target="_blank" rel="noopener">View on GitHub</a>
+    <div class="cta-row">
+      <a id="launch-btn" class="cta" href="#" target="_blank" rel="noopener">Launch the Tool →</a>
+      <a class="cta secondary" href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor" target="_blank" rel="noopener">View on GitHub</a>
+    </div>
 
     <div class="notice" id="not-deployed-notice">
-      <strong>Heads up:</strong> the live JupyterHub URL hasn't been configured yet.
-      Edit <code>docs/index.html</code> and set <code>window.HUB_URL</code> to your
-      deployed Hub address.
+      <strong>Coming soon:</strong> the live JupyterHub URL hasn't been configured yet.
+      Once the Hub is deployed, this button will take you straight to the signup screen.
     </div>
   </div>
-</header>
+</section>
 
-<main class="container">
+<!-- =================== Main content =================== -->
+<main>
 
-  <section>
+  <section id="about">
     <h2>What this is</h2>
     <p>
-      A reproducible analysis environment for the CTSM-Lab community. It
-      packages NCAR's <code>cesm-lab-neon</code> image plus our own analytics
-      utilities and notebooks so anyone can run NEON-site simulations and
+      A reproducible research environment that packages NCAR's
+      <code>cesm-lab-neon</code> image with custom analytics utilities and
+      guided notebooks. Researchers can run NEON-site simulations and
       calibrate them against tower observations without manually building
-      the CTSM toolchain.
+      the CTSM/CIME toolchain.
     </p>
 
     <div class="cards">
@@ -161,11 +313,11 @@
       </div>
       <div class="card">
         <h3>PFT perturbation</h3>
-        <p>Shift cover between plant functional types in the surface dataset and compare ecosystem-level responses to a control run.</p>
+        <p>Shift cover between plant functional types in the surface dataset and compare ecosystem-level responses against a control run.</p>
       </div>
       <div class="card">
         <h3>Calibration &amp; misfit</h3>
-        <p>Kalman-filter calibration of model output against observations, with built-in residual diagnostics.</p>
+        <p>Kalman-filter calibration of model output against tower observations, with built-in residual diagnostics and metrics.</p>
       </div>
       <div class="card">
         <h3>Interactive hubs</h3>
@@ -174,16 +326,16 @@
     </div>
   </section>
 
-  <section>
+  <section id="access">
     <h2>How to access</h2>
-    <p><strong>If you're a user:</strong> click <em>Launch the Tool</em> above, sign up with a username + password, and an admin will approve your account. Once approved you'll get your own JupyterLab session in a fresh CTSM container.</p>
+    <p><strong>If you're a user:</strong> click <em>Launch the Tool</em> above, sign up with a username and password, and an administrator will approve your account. Once approved you'll get your own JupyterLab session inside a fresh CTSM container with persistent storage.</p>
 
-    <p><strong>If you'd rather run it locally:</strong></p>
+    <p><strong>If you'd rather run it locally with Docker:</strong></p>
     <pre><code>docker run --rm -p 8888:8888 ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest</code></pre>
-    <p>Then open <a href="http://127.0.0.1:8888/lab">http://127.0.0.1:8888/lab</a>. The image is ~2 GB; first pull takes a few minutes.</p>
+    <p>Then open <a href="http://127.0.0.1:8888/lab">http://127.0.0.1:8888/lab</a> in your browser. The base image is ~2 GB; the first pull takes a few minutes.</p>
   </section>
 
-  <section>
+  <section id="stack">
     <h2>Tech stack</h2>
     <p>
       <span class="badge">CTSM 5.1</span>
@@ -196,8 +348,8 @@
       <span class="badge">Caddy / Let's Encrypt</span>
     </p>
     <p>
-      Source code, Dockerfile, and GitHub Actions CI all live in
-      <a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor">the public repo</a>.
+      Source code, Dockerfile, and CI configuration live in
+      <a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor">the public repository</a>.
       Container images are published to
       <a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/pkgs/container/exsoil-nsf-prototype-refactor"><code>ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor</code></a>
       on every push to <code>main</code>.
@@ -205,23 +357,55 @@
   </section>
 
   <section>
-    <h2>For developers</h2>
-    <p>To run a self-hosted JupyterHub instance using this image (the same setup that powers the <em>Launch</em> button above):</p>
+    <h2>For administrators</h2>
+    <p>To run a self-hosted JupyterHub instance using this image (the same configuration that powers the <em>Launch</em> button above):</p>
     <pre><code>git clone https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor.git
 cd exsoil-nsf-prototype-refactor/deploy/jupyterhub
 cp .env.example .env
 # edit JUPYTERHUB_ADMIN_USERS in .env
 docker compose up -d --build</code></pre>
-    <p>Full walkthrough including HTTPS via Caddy: <a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/blob/main/deploy/jupyterhub/README.md">deploy/jupyterhub/README.md</a>.</p>
+    <p>Full deployment walkthrough including HTTPS via Caddy and Let's Encrypt: <a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/blob/main/deploy/jupyterhub/README.md">deploy/jupyterhub/README.md</a>.</p>
   </section>
 
 </main>
 
+<!-- =================== Footer =================== -->
 <footer>
   <div class="container">
-    Built with the
-    <a href="https://hub.docker.com/r/escomp/cesm-lab-neon">escomp/cesm-lab-neon</a>
-    base image · MIT licensed · <a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor">github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor</a>
+    <div style="max-width: 320px;">
+      <h4>University of Wisconsin–Madison</h4>
+      <p style="margin: 0; color: #BFC3C8; font-size: 0.88rem;">
+        Data Science Institute<br />
+        Developed as part of an NSF-funded prototype for environmental
+        modeling reproducibility.
+      </p>
+    </div>
+
+    <div>
+      <h4>Project</h4>
+      <ul>
+        <li><a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor">Source code</a></li>
+        <li><a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/pkgs/container/exsoil-nsf-prototype-refactor">Container image</a></li>
+        <li><a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/blob/main/deploy/jupyterhub/README.md">Deployment guide</a></li>
+        <li><a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/issues">Report an issue</a></li>
+      </ul>
+    </div>
+
+    <div>
+      <h4>Partners</h4>
+      <ul>
+        <li><a href="https://www.cesm.ucar.edu/models/cesm" target="_blank" rel="noopener">NCAR / CESM</a></li>
+        <li><a href="https://www.neonscience.org/" target="_blank" rel="noopener">NEON</a></li>
+        <li><a href="https://www.nsf.gov/" target="_blank" rel="noopener">NSF</a></li>
+        <li><a href="https://datascience.wisc.edu/" target="_blank" rel="noopener">UW–Madison DSI</a></li>
+      </ul>
+    </div>
+
+    <div class="legal">
+      Built atop the <a href="https://hub.docker.com/r/escomp/cesm-lab-neon">escomp/cesm-lab-neon</a> base image.
+      Released under the MIT License.
+      &copy; 2026 Board of Regents of the University of Wisconsin System.
+    </div>
   </div>
 </footer>
 
@@ -234,7 +418,6 @@ docker compose up -d --build</code></pre>
       btn.href = url;
       notice.style.display = "none";
     } else {
-      // No real URL configured yet — keep the notice visible and disable the CTA
       btn.addEventListener("click", function (e) {
         e.preventDefault();
         notice.scrollIntoView({ behavior: "smooth" });
