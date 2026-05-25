@@ -6,9 +6,12 @@ without needing to know which submodule defines what.
 
 For names that appear in both kalman_filter.py and neon_eval_utils.py,
 the neon_eval_utils version wins (the project-canonical implementation).
+
+Each submodule is imported defensively so a missing function in one
+optional module doesn't break notebooks that only use a different one.
 """
 
-# CTSM data prep & evaluation utilities
+# CTSM data prep & evaluation utilities (core — required)
 from .neon_eval_utils import (
     ctsm_sim_depth,
     compute_fit,
@@ -20,7 +23,7 @@ from .neon_eval_utils import (
     kalman_gain_bias,
 )
 
-# S3 + visualization
+# S3 + visualization (core — required)
 from .data_access import (
     get_s3_client,
     get_storage_options,
@@ -33,16 +36,23 @@ from .data_access import (
     truncate_colormap,
 )
 
-# Notebook helpers
-from .neon_notebook_wrapper import (
-    download_sim_files,
-    list_sim_files_s3,
-)
+# Notebook helpers — optional; only pulls in symbols that exist
+try:
+    from .neon_notebook_wrapper import download_sim_files  # noqa: F401
+except ImportError:
+    pass
+try:
+    from .neon_notebook_wrapper import list_sim_files_s3  # noqa: F401
+except ImportError:
+    pass
 
-# Experiment management
-from .perturbation import CTSMExperimentManager
+# Experiment management — optional
+try:
+    from .perturbation import CTSMExperimentManager  # noqa: F401
+except ImportError:
+    pass
 
-# Optional: only available if `openai` is installed
+# LLM helper — only available when `openai` is installed AND OPENAI_API_KEY is set
 try:
     from .llm_interaction import ask_llm  # noqa: F401
 except ImportError:
