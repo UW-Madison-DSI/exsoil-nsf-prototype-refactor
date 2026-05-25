@@ -3,42 +3,165 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ExSoil — CTSM + NEON Analysis Environment · UW–Madison Data Science Institute</title>
-  <meta name="description" content="A containerized JupyterLab environment for running and analyzing CTSM simulations against NEON observational data. Developed at the University of Wisconsin–Madison Data Science Institute." />
+  <title>ExSoil Cyberinfrastructure — UW-Madison Data Science Institute</title>
+  <meta name="description" content="ExSoil Cyberinfrastructure: a containerized JupyterLab platform integrating NCAR CTSM simulations with NEON observational data. Three guided hubs for data exploration, experimental design, and experimentation." />
   <link rel="icon" type="image/png" href="logo/uw-logo-horizontal-color-web-digital.png" />
 
+  <!-- Red Hat Display + Red Hat Text (official UW typefaces) via Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:ital,wght@0,300..900;1,300..900&family=Red+Hat+Text:ital,wght@0,300..700;1,300..700&display=swap" />
+
   <!-- ⚠️ EDIT THIS ONE LINE once your JupyterHub is deployed -->
-  <script>window.HUB_URL = "https://hub.example.com"; // ← replace with your real hub URL</script>
+  <script>window.HUB_URL = "https://hub.example.com";</script>
 
   <style>
+    /* ============================================================
+       UW-Madison Design System — subset adapted from brand.wisc.edu
+       and the UW Style CSS v5.3.0. Static-site only (no Streamlit).
+       ============================================================ */
     :root {
-      --uw-red:        #C5050C;   /* UW Madison Badger Red (primary) */
-      --uw-red-dark:   #9B040A;
-      --uw-gold:       #FFCD00;   /* Anniversary Gold (accent) */
-      --uw-gold-light: #FFE082;
-      --ink:           #1F2024;
-      --ink-soft:      #4A4F55;
-      --muted:         #6E737A;
-      --bg:            #FAFAF8;
-      --card:          #FFFFFF;
-      --border:        #D9D9D6;
-      --code-bg:       #F4F4F1;
+      /* ===== Palette ===== */
+      --uw-red:           #C5050C;
+      --uw-red-dark:      #9B0000;
+      --uw-white:         #FFFFFF;
+      --uw-gray-dark:     #282728;
+      --uw-gray-light:    #E1E5E7;
+      --uw-gray-lightest: #F3F3F3;
+      --uw-black:         #121212;
+      --uw-yellow:        #FFB500;
+      --uw-gray-blue:     #6B8F99;
+      --uw-blue:          #385966;
+      --uw-link:          #036796;
+      --uw-link-hover:    #023D54;
+      --uw-border:        #CFCFCF;
+      --uw-cream:         #F6EDE4;
+      --uw-gold:          #D4AC7F;
+
+      /* Semantic aliases */
+      --fg-1: var(--uw-black);
+      --fg-2: var(--uw-gray-dark);
+      --fg-muted: #5A5A5A;
+      --fg-inverse: var(--uw-white);
+
+      --bg-1: var(--uw-white);
+      --bg-2: var(--uw-gray-lightest);
+      --bg-3: var(--uw-gray-light);
+      --bg-brand: var(--uw-red);
+      --bg-dark: var(--uw-black);
+
+      --border-1: var(--uw-border);
+      --focus-ring: var(--uw-link);
+
+      /* ===== Type families ===== */
+      --font-display: "Red Hat Display", Arial, sans-serif;
+      --font-body:    "Red Hat Text",    Arial, sans-serif;
+      --font-mono:    SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+
+      /* ===== Type scale ===== */
+      --fs-3xl: clamp(1.75rem,  1.75rem  + (1vw - 0.388rem) * 2.069, 2.5rem);
+      --fs-2xl: clamp(1.5rem,   1.5rem   + (1vw - 0.388rem) * 1.379, 2rem);
+      --fs-xl:  clamp(1.375rem, 1.375rem + (1vw - 0.388rem) * 0.345, 1.5rem);
+      --fs-l:   1.25rem;
+      --fs-base:1.125rem;
+      --fs-s:   1rem;
+      --fs-xs:  0.8125rem;
+      --fs-micro: 0.725rem;
+      --fs-display-hero: clamp(2.5rem, 5vw, 4rem);
+
+      --lh-heading: 1.3;
+      --lh-body:    1.5;
+
+      /* ===== Spacing ===== */
+      --space-xs:  0.375rem;
+      --space-s:   clamp(0.5rem, 1.5vw, 0.75rem);
+      --space-m:   clamp(1rem, 2.5vw, 1.25rem);
+      --space-l:   clamp(1.5rem, 3vw, 2rem);
+      --space-xl:  clamp(2rem, 4vw, 3rem);
+      --space-2xl: clamp(3rem, 6vw, 5rem);
+
+      /* ===== Radius / shadow ===== */
+      --radius-sm:   0.25rem;
+      --radius-md:   0.5rem;
+      --radius-pill: 999px;
+      --shadow-button: 2px 2px 6px 0 rgba(0, 0, 0, 0.25);
+      --shadow-card:   0 2px 8px  rgba(18, 18, 18, 0.08);
+      --shadow-pop:    0 8px 24px rgba(18, 18, 18, 0.15);
+
+      /* Signature mini-bar */
+      --mini-bar-w: 1.5em;
+      --mini-bar-h: 0.2em;
+
+      --row-max:    75rem;
+      --row-narrow: 50rem;
     }
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
+
+    /* ===== Base ===== */
+    html { box-sizing: border-box; scroll-behavior: smooth; }
+    *, *::before, *::after { box-sizing: inherit; }
+
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Red Hat Text", Helvetica, Arial, sans-serif;
-      color: var(--ink);
-      background: var(--bg);
-      line-height: 1.55;
+      color: var(--fg-1);
+      background: var(--bg-1);
+      font-family: var(--font-body);
+      font-size: var(--fs-base);
+      line-height: var(--lh-body);
+      font-weight: 400;
+      -webkit-font-smoothing: antialiased;
     }
-    a { color: var(--uw-red); }
-    a:hover { color: var(--uw-red-dark); }
 
-    /* ============== Institutional top bar ============== */
+    h1, h2, h3, h4, h5, h6 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      line-height: var(--lh-heading);
+      margin: 0;
+    }
+    h1 { font-size: var(--fs-3xl); }
+    h2 { font-size: var(--fs-2xl); margin: 2rem 0 1rem; }
+    h3 { font-size: var(--fs-xl);  margin: 1.8rem 0 0.9rem; }
+    h4 { font-size: var(--fs-l);   margin: 1.8rem 0 0.5rem; }
+
+    p { margin: 0 0 1rem; }
+    a { color: var(--uw-link); text-decoration: none; }
+    a:hover, a:focus { color: var(--uw-link-hover); text-decoration: underline; }
+    strong, b { font-weight: 640; }
+
+    code, pre {
+      font-family: var(--font-mono);
+      font-size: 0.95em;
+    }
+    code {
+      background: var(--bg-2);
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      color: var(--fg-1);
+    }
+    pre {
+      background: var(--bg-2);
+      padding: var(--space-m) var(--space-l);
+      border-radius: var(--radius-md);
+      overflow-x: auto;
+      border: 1px solid var(--border-1);
+      max-width: var(--row-narrow);
+    }
+    pre code { background: none; padding: 0; }
+
+    /* ===== Signature mini-bar ===== */
+    .uw-mini-bar { position: relative; }
+    .uw-mini-bar::before {
+      content: "";
+      display: block;
+      background: var(--uw-red);
+      width: var(--mini-bar-w);
+      height: var(--mini-bar-h);
+      margin-bottom: var(--space-xs);
+    }
+    .uw-mini-bar-white::before { background: var(--uw-white); }
+
+    /* ===== Top bar ===== */
     .topbar {
-      background: #ffffff;
+      background: var(--bg-1);
       border-bottom: 4px solid var(--uw-red);
     }
     .topbar .container {
@@ -46,221 +169,250 @@
       align-items: center;
       justify-content: space-between;
       padding: 14px 28px;
-      max-width: 1080px;
+      max-width: var(--row-max);
       margin: 0 auto;
     }
-    .topbar img.uw-logo {
-      height: 44px;
-      width: auto;
-      display: block;
-    }
+    .topbar img.uw-logo { height: 44px; width: auto; display: block; }
     .topbar nav a {
-      color: var(--ink-soft);
+      color: var(--fg-2);
       text-decoration: none;
-      font-size: 0.95rem;
-      font-weight: 500;
+      font-family: var(--font-body);
+      font-size: var(--fs-s);
+      font-weight: 600;
       margin-left: 24px;
     }
-    .topbar nav a:hover { color: var(--uw-red); }
+    .topbar nav a:hover { color: var(--uw-red); text-decoration: none; }
 
-    /* ============== Hero ============== */
+    /* ===== Hero ===== */
     .hero {
-      background:
-        linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
-      padding: 56px 0 48px;
-      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 100%);
+      padding: var(--space-2xl) 0 var(--space-xl);
+      border-bottom: 1px solid var(--border-1);
     }
-    .hero .container { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+    .hero .container {
+      max-width: var(--row-max);
+      margin: 0 auto;
+      padding: 0 28px;
+    }
     .hero .eyebrow {
       display: inline-block;
       color: var(--uw-red);
-      font-size: 0.78rem;
+      font-family: var(--font-body);
+      font-size: var(--fs-micro);
       font-weight: 700;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
-      margin: 0 0 14px;
-      padding: 4px 10px;
-      background: rgba(197, 5, 12, 0.08);
-      border-radius: 4px;
+      margin: 0 0 var(--space-m);
     }
     .hero h1 {
-      margin: 0 0 14px;
-      font-size: 2.4rem;
-      line-height: 1.15;
-      letter-spacing: -0.5px;
-      color: var(--ink);
-      max-width: 760px;
+      margin: 0 0 var(--space-m);
+      color: var(--fg-1);
+      font-size: var(--fs-display-hero);
+      letter-spacing: -0.02em;
+      max-width: 18ch;
     }
     .hero .tagline {
-      margin: 0 0 28px;
-      font-size: 1.15rem;
-      color: var(--ink-soft);
-      max-width: 760px;
+      margin: 0 0 var(--space-l);
+      font-size: var(--fs-l);
+      color: var(--fg-2);
+      max-width: 720px;
     }
 
-    .cta-row { margin-top: 8px; }
+    /* ===== Buttons (UW spec) ===== */
     .cta {
       display: inline-block;
-      background: var(--uw-red);
-      color: #fff;
+      background-color: var(--uw-red);
+      color: var(--uw-white);
       text-decoration: none;
-      padding: 14px 28px;
-      border-radius: 6px;
+      padding: 0.65rem 1.5rem;
+      border-radius: var(--radius-md);
+      font-family: var(--font-body);
       font-weight: 600;
-      font-size: 1.05rem;
-      transition: background 0.15s, transform 0.05s;
-      border: 2px solid var(--uw-red);
+      font-size: var(--fs-s);
+      border: 1px solid var(--uw-red);
+      box-shadow: var(--shadow-button);
+      transition: background-color 0.15s ease, transform 0.05s ease;
     }
-    .cta:hover { background: var(--uw-red-dark); border-color: var(--uw-red-dark); color: #fff; }
+    .cta:hover {
+      background-color: var(--uw-red-dark);
+      border-color: var(--uw-red-dark);
+      color: var(--uw-white);
+      text-decoration: none;
+    }
     .cta:active { transform: translateY(1px); }
+    .cta:focus-visible {
+      outline: 3px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
     .cta.secondary {
-      background: transparent;
+      background-color: transparent;
       color: var(--uw-red);
       border: 2px solid var(--uw-red);
       margin-left: 12px;
+      box-shadow: none;
     }
-    .cta.secondary:hover { background: var(--uw-red); color: #fff; }
+    .cta.secondary:hover {
+      background-color: var(--uw-red);
+      color: var(--uw-white);
+    }
 
+    /* ===== Notice ===== */
     .notice {
-      background: #FFF7DC;
-      border-left: 4px solid var(--uw-gold);
-      border-radius: 4px;
-      padding: 12px 18px;
-      margin: 22px 0 0;
-      font-size: 0.95rem;
-      color: var(--ink-soft);
-      max-width: 760px;
+      background: #FFF5D6;
+      border-left: 4px solid var(--uw-yellow);
+      border-radius: var(--radius-sm);
+      padding: var(--space-m) var(--space-l);
+      margin: var(--space-l) 0 0;
+      font-size: var(--fs-s);
+      color: var(--fg-2);
+      max-width: 720px;
     }
 
-    /* ============== Main content ============== */
+    /* ===== Main ===== */
     main {
-      max-width: 1080px;
+      max-width: var(--row-max);
       margin: 0 auto;
-      padding: 56px 28px 80px;
+      padding: var(--space-2xl) 28px var(--space-2xl);
     }
-    section { margin-bottom: 56px; }
-    section h2 {
-      margin: 0 0 20px;
-      font-size: 1.45rem;
-      color: var(--ink);
-      padding-bottom: 10px;
-      border-bottom: 2px solid var(--uw-red);
-      display: inline-block;
-    }
-    section p { margin: 0 0 14px; color: var(--ink-soft); max-width: 760px; }
+    section { margin-bottom: var(--space-2xl); }
+    section > p { max-width: var(--row-narrow); color: var(--fg-2); }
 
-    .cards {
+    /* ===== Hubs section ===== */
+    .hubs {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 18px;
-      margin-top: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: var(--space-l);
+      margin-top: var(--space-l);
     }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-top: 3px solid var(--uw-red);
-      border-radius: 6px;
-      padding: 22px 24px;
-      transition: transform 0.15s, box-shadow 0.15s;
+    .hub {
+      background: var(--bg-1);
+      border: 1px solid var(--border-1);
+      border-top: 4px solid var(--uw-red);
+      border-radius: var(--radius-md);
+      padding: var(--space-l);
+      box-shadow: var(--shadow-card);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      display: flex;
+      flex-direction: column;
     }
-    .card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 18px rgba(31, 32, 36, 0.08);
+    .hub:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-pop);
     }
-    .card h3 {
-      margin: 0 0 8px;
-      font-size: 1.05rem;
-      color: var(--ink);
+    .hub .hub-label {
+      font-family: var(--font-body);
+      font-size: var(--fs-micro);
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--uw-red);
+      margin: 0 0 var(--space-xs);
     }
-    .card p { font-size: 0.95rem; color: var(--ink-soft); margin: 0; }
+    .hub h3 {
+      margin: 0 0 var(--space-s);
+      font-size: var(--fs-l);
+      color: var(--fg-1);
+    }
+    .hub p {
+      margin: 0;
+      color: var(--fg-2);
+      font-size: var(--fs-s);
+    }
+    .hub-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      background: var(--uw-red);
+      color: var(--uw-white);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.1rem;
+      margin-bottom: var(--space-s);
+    }
 
-    /* ============== Code ============== */
-    code, pre {
-      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-      font-size: 0.9rem;
-    }
-    code {
-      background: var(--code-bg);
-      padding: 2px 6px;
-      border-radius: 4px;
-      color: var(--ink);
-    }
-    pre {
-      background: var(--code-bg);
-      padding: 16px 20px;
-      border-radius: 6px;
-      overflow-x: auto;
-      border: 1px solid var(--border);
-      max-width: 760px;
-    }
-    pre code { background: none; padding: 0; }
-
-    /* ============== Badges ============== */
+    /* ===== Tech badges ===== */
     .badge {
       display: inline-block;
-      background: #fff;
-      color: var(--ink-soft);
-      border: 1px solid var(--border);
-      padding: 3px 12px;
-      border-radius: 999px;
-      font-size: 0.82rem;
+      background: var(--bg-2);
+      color: var(--fg-2);
+      border: 1px solid var(--border-1);
+      padding: 4px 14px;
+      border-radius: var(--radius-pill);
+      font-family: var(--font-body);
+      font-size: var(--fs-xs);
+      font-weight: 500;
       margin: 0 6px 8px 0;
     }
 
-    /* ============== Footer ============== */
+    /* ===== Footer ===== */
     footer {
-      background: #1A1B1F;
+      background: var(--uw-black);
       color: #BFC3C8;
       border-top: 4px solid var(--uw-red);
-      padding: 36px 28px 28px;
-      font-size: 0.9rem;
+      padding: var(--space-xl) 28px var(--space-l);
+      font-size: var(--fs-s);
     }
     footer .container {
-      max-width: 1080px;
+      max-width: var(--row-max);
       margin: 0 auto;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 36px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: var(--space-xl);
       align-items: flex-start;
-      justify-content: space-between;
     }
     footer h4 {
-      margin: 0 0 10px;
-      color: #fff;
-      font-size: 0.95rem;
+      margin: 0 0 var(--space-s);
+      color: var(--uw-white);
+      font-family: var(--font-display);
+      font-size: var(--fs-s);
       letter-spacing: 0.04em;
     }
-    footer a { color: #E0E3E7; text-decoration: none; }
-    footer a:hover { color: var(--uw-gold); text-decoration: underline; }
+    footer p, footer li {
+      color: #BFC3C8;
+      font-family: var(--font-body);
+      font-size: var(--fs-xs);
+    }
+    footer a { color: #E0E3E7; }
+    footer a:hover { color: var(--uw-yellow); }
     footer ul { list-style: none; padding: 0; margin: 0; }
-    footer li { margin-bottom: 6px; }
-    footer .legal {
-      width: 100%;
+    footer li { margin-bottom: var(--space-xs); }
+    .footer-legal {
+      grid-column: 1 / -1;
       border-top: 1px solid #2E3036;
-      padding-top: 16px;
-      margin-top: 20px;
+      padding-top: var(--space-m);
+      margin-top: var(--space-s);
       color: #8C9097;
-      font-size: 0.82rem;
+      font-size: var(--fs-micro);
     }
 
     @media (max-width: 640px) {
       .topbar .container { flex-direction: column; gap: 10px; padding: 14px 20px; }
       .topbar nav a { margin: 0 8px; }
-      .hero h1 { font-size: 1.85rem; }
       .cta.secondary { margin-left: 0; margin-top: 10px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
     }
   </style>
 </head>
 <body>
 
-<!-- =================== Institutional top bar =================== -->
+<!-- ===== Institutional top bar ===== -->
 <div class="topbar">
   <div class="container">
     <a href="https://www.wisc.edu/" target="_blank" rel="noopener" aria-label="University of Wisconsin–Madison">
       <img class="uw-logo" src="logo/uw-logo-horizontal-color-web-digital.png" alt="University of Wisconsin–Madison" />
     </a>
     <nav>
-      <a href="#about">About</a>
+      <a href="#hubs">Hubs</a>
       <a href="#access">Access</a>
       <a href="#stack">Stack</a>
       <a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor" target="_blank" rel="noopener">GitHub ↗</a>
@@ -268,20 +420,19 @@
   </div>
 </div>
 
-<!-- =================== Hero =================== -->
+<!-- ===== Hero ===== -->
 <section class="hero">
   <div class="container">
-    <span class="eyebrow">UW–Madison Data Science Institute · NSF Prototype</span>
-    <h1>ExSoil: CTSM + NEON Analysis Environment</h1>
+    <span class="eyebrow">UW–Madison Data Science Institute · NSF Cyberinfrastructure</span>
+    <h1>ExSoil Cyberinfrastructure</h1>
     <p class="tagline">
-      A containerized JupyterLab platform for running NCAR's
-      <strong>Community Terrestrial Systems Model (CTSM)</strong> against
-      <strong>NEON</strong> tower observations — with built-in Kalman-filter
-      calibration, plant-functional-type perturbation experiments, and
-      S3-backed forcing pipelines.
+      A containerized JupyterLab platform that brings NCAR's
+      <strong>Community Terrestrial Systems Model</strong> together with
+      <strong>NEON</strong> tower observations through three guided hubs —
+      data exploration, experimental design, and experimentation.
     </p>
 
-    <div class="cta-row">
+    <div>
       <a id="launch-btn" class="cta" href="#" target="_blank" rel="noopener">Launch the Tool →</a>
       <a class="cta secondary" href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor" target="_blank" rel="noopener">View on GitHub</a>
     </div>
@@ -293,41 +444,81 @@
   </div>
 </section>
 
-<!-- =================== Main content =================== -->
+<!-- ===== Main content ===== -->
 <main>
 
-  <section id="about">
-    <h2>What this is</h2>
+  <section>
+    <h2 class="uw-mini-bar">What ExSoil is</h2>
     <p>
-      A reproducible research environment that packages NCAR's
-      <code>cesm-lab-neon</code> image with custom analytics utilities and
-      guided notebooks. Researchers can run NEON-site simulations and
-      calibrate them against tower observations without manually building
-      the CTSM/CIME toolchain.
+      <strong>ExSoil Cyberinfrastructure</strong> is a reproducible research
+      environment developed at the University of Wisconsin–Madison Data Science
+      Institute under NSF cyberinfrastructure prototype funding. It packages
+      NCAR's <code>cesm-lab-neon</code> image alongside custom analytics
+      utilities and three guided notebook hubs, so researchers can interrogate
+      soil–ecosystem dynamics at NEON tower sites without building the CTSM
+      toolchain themselves.
+    </p>
+    <p>
+      All compute happens in a per-user container with persistent storage;
+      authentication is handled by JupyterHub with admin-approved password
+      signup. The same image can also be pulled and run locally for offline
+      use.
+    </p>
+  </section>
+
+  <section id="hubs">
+    <h2 class="uw-mini-bar">The three hubs</h2>
+    <p>
+      A typical CTSM-vs-NEON workflow is organized across three connected
+      JupyterLab notebooks. They share a common <code>analytics_modules</code>
+      Python package, so state and helpers flow naturally from one stage to
+      the next — but each hub is self-contained, and you can enter the
+      workflow at whichever step matches your goal.
     </p>
 
-    <div class="cards">
-      <div class="card">
-        <h3>CTSM simulations</h3>
-        <p>One-command transient runs for any of 47 NEON sites via <code>run_neon_v2.py</code>, with optional S3-backed forcing data and counterfactual transforms (scaling, seasonal, noise).</p>
-      </div>
-      <div class="card">
-        <h3>PFT perturbation</h3>
-        <p>Shift cover between plant functional types in the surface dataset and compare ecosystem-level responses against a control run.</p>
-      </div>
-      <div class="card">
-        <h3>Calibration &amp; misfit</h3>
-        <p>Kalman-filter calibration of model output against tower observations, with built-in residual diagnostics and metrics.</p>
-      </div>
-      <div class="card">
-        <h3>Interactive hubs</h3>
-        <p>Guided notebooks for data exploration (Data Hub), experimental design (Design Hub), and modeling (Modeling Hub).</p>
-      </div>
+    <div class="hubs">
+      <article class="hub">
+        <div class="hub-icon" aria-hidden="true">01</div>
+        <p class="hub-label">Explore</p>
+        <h3>Data Hub</h3>
+        <p>
+          The starting point. Browse NEON tower observations and CTSM history
+          files side-by-side: pull half-hourly meteorological and flux
+          measurements, visualize the five core sites
+          (ABBY, CLBJ, CPER, KONZ, TALL) on a map, and inspect soil-moisture
+          and energy-flux time series through an S3-backed pipeline.
+        </p>
+      </article>
+
+      <article class="hub">
+        <div class="hub-icon" aria-hidden="true">02</div>
+        <p class="hub-label">Design</p>
+        <h3>Design Hub</h3>
+        <p>
+          Set up controlled experiments. Pick a site and year, choose a
+          perturbation — precipitation scaling, seasonal forcing, Gaussian
+          noise, or shifts in plant-functional-type cover — and stage matched
+          control and treatment runs ready for submission.
+        </p>
+      </article>
+
+      <article class="hub">
+        <div class="hub-icon" aria-hidden="true">03</div>
+        <p class="hub-label">Run &amp; evaluate</p>
+        <h3>Experimentation Hub</h3>
+        <p>
+          Run the experiments and quantify their impact. Includes
+          Kalman-filter calibration of model output against tower
+          observations, residual misfit diagnostics, and a side-by-side
+          comparison view for control vs. perturbed runs across key
+          ecosystem variables.
+        </p>
+      </article>
     </div>
   </section>
 
   <section id="access">
-    <h2>How to access</h2>
+    <h2 class="uw-mini-bar">How to access</h2>
     <p><strong>If you're a user:</strong> click <em>Launch the Tool</em> above, sign up with a username and password, and an administrator will approve your account. Once approved you'll get your own JupyterLab session inside a fresh CTSM container with persistent storage.</p>
 
     <p><strong>If you'd rather run it locally with Docker:</strong></p>
@@ -336,7 +527,7 @@
   </section>
 
   <section id="stack">
-    <h2>Tech stack</h2>
+    <h2 class="uw-mini-bar">Tech stack</h2>
     <p>
       <span class="badge">CTSM 5.1</span>
       <span class="badge">JupyterLab</span>
@@ -357,7 +548,7 @@
   </section>
 
   <section>
-    <h2>For administrators</h2>
+    <h2 class="uw-mini-bar">For administrators</h2>
     <p>To run a self-hosted JupyterHub instance using this image (the same configuration that powers the <em>Launch</em> button above):</p>
     <pre><code>git clone https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor.git
 cd exsoil-nsf-prototype-refactor/deploy/jupyterhub
@@ -369,20 +560,19 @@ docker compose up -d --build</code></pre>
 
 </main>
 
-<!-- =================== Footer =================== -->
+<!-- ===== Footer ===== -->
 <footer>
   <div class="container">
-    <div style="max-width: 320px;">
-      <h4>University of Wisconsin–Madison</h4>
-      <p style="margin: 0; color: #BFC3C8; font-size: 0.88rem;">
+    <div>
+      <h4 class="uw-mini-bar uw-mini-bar-white">University of Wisconsin–Madison</h4>
+      <p>
         Data Science Institute<br />
-        Developed as part of an NSF-funded prototype for environmental
-        modeling reproducibility.
+        Developed under NSF cyberinfrastructure prototype funding.
       </p>
     </div>
 
     <div>
-      <h4>Project</h4>
+      <h4 class="uw-mini-bar uw-mini-bar-white">Project</h4>
       <ul>
         <li><a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor">Source code</a></li>
         <li><a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/pkgs/container/exsoil-nsf-prototype-refactor">Container image</a></li>
@@ -392,7 +582,7 @@ docker compose up -d --build</code></pre>
     </div>
 
     <div>
-      <h4>Partners</h4>
+      <h4 class="uw-mini-bar uw-mini-bar-white">Partners</h4>
       <ul>
         <li><a href="https://www.cesm.ucar.edu/models/cesm" target="_blank" rel="noopener">NCAR / CESM</a></li>
         <li><a href="https://www.neonscience.org/" target="_blank" rel="noopener">NEON</a></li>
@@ -401,10 +591,8 @@ docker compose up -d --build</code></pre>
       </ul>
     </div>
 
-    <div class="legal">
-      Built atop the <a href="https://hub.docker.com/r/escomp/cesm-lab-neon">escomp/cesm-lab-neon</a> base image.
-      Released under the MIT License.
-      &copy; 2026 Board of Regents of the University of Wisconsin System.
+    <div class="footer-legal">
+      Built atop the <a href="https://hub.docker.com/r/escomp/cesm-lab-neon">escomp/cesm-lab-neon</a> base image. Released under the MIT License. © 2026 Board of Regents of the University of Wisconsin System.
     </div>
   </div>
 </footer>
