@@ -23,6 +23,12 @@ services:
       JUPYTERHUB_ADMIN_USERS: ${JUPYTERHUB_ADMIN_USERS:-admin}
       JUPYTERHUB_MEM_LIMIT: ${JUPYTERHUB_MEM_LIMIT:-4G}
       JUPYTERHUB_CPU_LIMIT: ${JUPYTERHUB_CPU_LIMIT:-2}
+      # Shared secrets — pulled from .env and forwarded into each spawned
+      # user container by DockerSpawner (see jupyterhub_config.py).
+      COS_ACCESS_KEY_ID:     ${COS_ACCESS_KEY_ID:-}
+      COS_SECRET_ACCESS_KEY: ${COS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION:    ${AWS_DEFAULT_REGION:-us-east-1}
+      OPENAI_API_KEY:        ${OPENAI_API_KEY:-}
 
 networks:
   hub:

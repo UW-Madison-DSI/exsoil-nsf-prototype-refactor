@@ -52,6 +52,23 @@ c.Spawner.cpu_limit = float(os.environ.get("JUPYTERHUB_CPU_LIMIT", "2"))
 c.Spawner.http_timeout = 120
 c.Spawner.start_timeout = 600  # base image is large; allow time for first spawn
 
+# ---------------------------------------------------------------------------
+# Shared secrets forwarded into every spawned user container
+# ---------------------------------------------------------------------------
+# Pulled from the Hub container's environment (which docker-compose loads
+# from deploy/jupyterhub/.env). Empty values are passed through silently;
+# the notebooks' own pre-flight checks tell the user when a required key
+# is missing.
+_passthrough_env_vars = [
+    "COS_ACCESS_KEY_ID",
+    "COS_SECRET_ACCESS_KEY",
+    "AWS_DEFAULT_REGION",
+    "OPENAI_API_KEY",
+]
+c.DockerSpawner.environment = {
+    name: os.environ.get(name, "") for name in _passthrough_env_vars
+}
+
 
 # ---------------------------------------------------------------------------
 # Authenticator: NativeAuthenticator (signup + password)
