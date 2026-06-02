@@ -90,7 +90,12 @@ sys.path.insert(1, _CTSM_PYTHON)
 
 from ctsm import add_cime_to_path
 from ctsm.path_utils import path_to_ctsm_root
-from ctsm.download_utils import download_file
+try:
+    from ctsm.download_utils import download_file
+except ImportError:
+    import urllib.request
+    def download_file(url, dest):
+        urllib.request.urlretrieve(url, dest)
 
 import CIME.build as build
 from standard_script_setup import *

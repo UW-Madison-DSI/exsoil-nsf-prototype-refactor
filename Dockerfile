@@ -142,7 +142,7 @@ COPY --chown=user:cesm analytics_modules/ /opt/analytics_modules/
 RUN find ${CESMROOT} -name "six.py" -not -path "*/site-packages/*" -delete \
  && find ${CESMROOT} -name "six_additions.py" -delete
 
-ENV PYTHONPATH="/opt:/opt/analytics_modules:${CESMROOT}/components/clm/python:${CESMROOT}/cime/scripts/lib"
+ENV PYTHONPATH="/opt:/opt/analytics_modules:${CESMROOT}/components/clm/python:${CESMROOT}/cime/scripts/lib:${CESMROOT}/cime/scripts/Tools"
 
 # Drop extended NEON wrapper next to the upstream run_neon.py
 COPY --chown=user:cesm --chmod=0755 \
@@ -157,6 +157,7 @@ RUN ln -sf ${CESMROOT}/tools/site_and_regional/run_neon.py     /usr/local/bin/ru
 COPY --chown=user:cesm notebooks/ /home/user/notebooks/
 
 USER user
+ENV USER=user
 WORKDIR /home/user
 
 EXPOSE 8888
