@@ -1,0 +1,11 @@
+name: base
+channels:
+  - conda-forge
+  - nodefaults
+
+dependencies:
+  - distributed
+  - dask-gateway
+  - dask-jobqueue
+  - dask-labextension
+  - mpi4py

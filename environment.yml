@@ -1,0 +1,75 @@
+name: base
+channels:
+  - conda-forge
+  - nodefaults
+
+dependencies:
+  # --- Python ---
+  - python >=3.11,<3.13
+
+  # --- Compilers & build (needed for CESM case.build) ---
+  - gfortran
+  - gcc
+  - gxx
+  - cmake
+  - make
+  - m4
+
+  # --- MPI + scientific I/O (conda-forge, consistent ABI) ---
+  - mpich
+  - hdf5=*=mpi_mpich_*
+  - netcdf4=*=mpi_mpich_*
+  - netcdf-fortran=*=mpi_mpich_*
+  - libpnetcdf
+  - h5py
+
+  # --- Core scientific ---
+  - numpy
+  - scipy
+  - pandas
+  - xarray
+  - scikit-learn
+
+  # --- Earth science / CESM ---
+  - esmpy
+  - cartopy
+  - pyproj
+  - shapely
+  - fiona
+  - geopandas
+  - rasterio
+  - gdal
+
+  # --- Visualization ---
+  - matplotlib
+  - bokeh
+  - holoviews
+  - hvplot
+  - panel
+  - geoviews
+  - datashader
+  - ipyleaflet
+
+  # --- Jupyter ---
+  - jupyterlab >=4
+  - ipykernel
+  - ipywidgets
+  - jupyterhub
+
+  # --- Dask (core only; see environment-dask.yml for distributed) ---
+  - dask
+
+  # --- Data access ---
+  - boto3
+  - s3fs
+  - fsspec
+  - requests
+  - h5netcdf
+  - pyyaml
+
+  # --- Utilities ---
+  - tqdm
+
+  # --- pip-only packages ---
+  - pip:
+      - openai

@@ -1,6 +1,6 @@
 # ADR-0004: Distributed Computing Support (Dask + MPI)
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-06-02
 **Decision makers:** Steven Wangen
 
@@ -97,7 +97,7 @@ esmpy is used by this project for regridding and is available on conda-forge as 
 - Users deploying on HPC clusters can add `dask-jobqueue` the same way.
 - The default image remains focused on the teaching/analysis use case.
 
-## Open Questions
+## Resolved Questions
 
-- **Should HDF5/NetCDF also come from conda-forge?** If MPICH is moving to conda-forge, the same argument applies to HDF5, NetCDF-C, NetCDF-Fortran, and PNetCDF. Using conda-forge for the entire stack would eliminate the source-compilation stage entirely. This is likely the right call but needs validation that CESM's build system is happy with conda-forge library paths. See [ADR-0002](0002-arm64-build-strategy.md) Phase 1.
-- **mpi4py in base or optional?** Currently not used by the project. Could go in the Dask optional layer or in the base environment for users who want MPI from Python. Leaning toward optional.
+- **Should HDF5/NetCDF also come from conda-forge?** Yes. The implementation uses conda-forge for the entire compiled stack (MPICH, HDF5, NetCDF-C, NetCDF-Fortran, PNetCDF). CESM's build system accepts the conda-forge library paths via `$CONDA_PREFIX` in the machine config XML. This eliminated the source-compilation stage entirely.
+- **mpi4py in base or optional?** Optional. It is included in `environment-dask.yml` alongside the other distributed computing packages. The base image does not install it.

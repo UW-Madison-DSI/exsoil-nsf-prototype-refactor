@@ -1,6 +1,6 @@
 # ADR-0001: Base Image for ARM64 Container Rebuild
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-06-02
 **Decision makers:** Steven Wangen
 

@@ -1,6 +1,6 @@
 # ADR-0003: Conda Environment Strategy for Multi-Arch Image
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-06-02
 **Decision makers:** Steven Wangen
 
@@ -71,7 +71,7 @@ Based on notebook imports and project requirements, the environment needs:
 `jupyterlab >=4`, `ipykernel`, `ipywidgets`, `jupyterhub`
 
 **Dask:**
-`dask`, `distributed`
+`dask` (core only; `distributed` is in the optional Dask layer per [ADR-0004](0004-distributed-computing-support.md))
 
 **Project-specific (pip):**
 `openai` (used by analytics_modules), `boto3` / `s3fs` (S3 forcing data access)

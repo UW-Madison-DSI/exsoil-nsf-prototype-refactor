@@ -1,6 +1,6 @@
 # ADR-0002: Build Strategy for Multi-Arch Image
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-06-02
 **Decision makers:** Steven Wangen
 
@@ -48,7 +48,7 @@ Per [ADR-0004](0004-distributed-computing-support.md), all compiled scientific l
 
 **CI approach:**
 - GitHub Actions with `docker/build-push-action` and QEMU for arm64.
-- The QEMU overhead is acceptable because Stage 1 (the slow compilation) is cached. Only Stage 4 rebuilds on typical pushes, which is fast on any architecture.
+- The QEMU overhead is acceptable because Stage 1 (the conda install) is cached. Only Stage 3 rebuilds on typical pushes, which is fast on any architecture.
 - For the initial build (or when Stage 1 cache is cold), consider using a self-hosted arm64 runner or accepting a one-time slow build.
 
 ### Option B: Separate Dockerfiles per Architecture
@@ -142,3 +142,15 @@ Run all project notebooks end-to-end on both architectures. Compare outputs (esp
 | A conda package lacks arm64 build | Low (all key packages verified available) | Pin to a version that has arm64 support, or use pip fallback |
 | Numerical differences between amd64 and arm64 | Medium (floating-point behavior can differ) | Accept small differences; compare CESM output fields within tolerance |
 | QEMU-based CI builds are too slow | Low (no source compilation; conda install is fast even under QEMU) | Cache conda packages; consider self-hosted arm64 runner if needed |
+
+## Implementation Notes (added post-build)
+
+The following issues were discovered and resolved during the initial build:
+
+- **CESM 2.2.0 to 2.2.2.** The original plan assumed CESM 2.2.0 (matching the upstream image). However, 2.2.0's `checkout_externals` uses SVN to fetch COSP2 and other sub-components, and GitHub removed SVN support in January 2024. CESM 2.2.2 switches these externals to git. The Dockerfile uses `release-cesm2.2.2`.
+
+- **Bundled `six.py` in CESM tree.** Both CLM (`components/clm/python/six.py`) and CIME (`cime/scripts/lib/six.py`) bundle an old copy of the `six` library. When these directories are on `PYTHONPATH`, the bundled `six` shadows the real conda-forge package, breaking `python-dateutil` (which imports `six.moves`). The Dockerfile removes these bundled copies.
+
+- **CTSM/CIME Python paths.** `run_neon_v2.py` imports `from ctsm import add_cime_to_path` and `import CIME`. These modules live at `${CESMROOT}/components/clm/python` and `${CESMROOT}/cime/scripts/lib` respectively. `PYTHONPATH` must include both paths.
+
+- **`libpnetcdf` package name.** The conda-forge package is `libpnetcdf`, not `pnetcdf`. The initial build failed until this was corrected in `environment.yml`.

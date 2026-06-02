@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+
+<!--
+  Compiler settings for CESM container builds, adapted from ESCOMP/ESCOMP-Containers.
+  Includes the generic GNU block and the container-specific override with
+  conda-forge library paths.
+-->
+
+<config_compilers version="2.0">
+
+  <!-- Generic GNU compiler settings -->
+  <compiler COMPILER="gnu">
+    <CFLAGS>
+      <base> -std=gnu99 </base>
+      <append compile_threaded="TRUE"> -fopenmp </append>
+      <append DEBUG="TRUE"> -g -Wall -Og -fbacktrace -ffpe-trap=invalid,zero,overflow -fcheck=bounds </append>
+      <append DEBUG="FALSE"> -O </append>
+    </CFLAGS>
+    <CPPDEFS>
+      <append> -DFORTRANUNDERSCORE -DNO_R16 -DCPRGNU</append>
+    </CPPDEFS>
+    <CXX_LINKER>FORTRAN</CXX_LINKER>
+    <FC_AUTO_R8>
+      <base> -fdefault-real-8 </base>
+    </FC_AUTO_R8>
+    <FFLAGS>
+      <base>  -fconvert=big-endian -ffree-line-length-none -ffixed-line-length-none </base>
+      <append compile_threaded="TRUE"> -fopenmp </append>
+      <append DEBUG="TRUE"> -g -Wall -Og -fbacktrace -ffpe-trap=zero,overflow -fcheck=bounds </append>
+      <append DEBUG="FALSE"> -O </append>
+    </FFLAGS>
+    <FFLAGS_NOOPT>
+      <base> -O0 </base>
+    </FFLAGS_NOOPT>
+    <FIXEDFLAGS>
+      <base>  -ffixed-form </base>
+    </FIXEDFLAGS>
+    <FREEFLAGS>
+      <base> -ffree-form </base>
+    </FREEFLAGS>
+    <HAS_F2008_CONTIGUOUS>FALSE</HAS_F2008_CONTIGUOUS>
+    <LDFLAGS>
+      <append compile_threaded="TRUE"> -fopenmp </append>
+    </LDFLAGS>
+    <MPICC> mpicc  </MPICC>
+    <MPICXX> mpicxx </MPICXX>
+    <MPIFC> mpif90 </MPIFC>
+    <SCC> gcc </SCC>
+    <SCXX> g++ </SCXX>
+    <SFC> gfortran </SFC>
+    <SUPPORTS_CXX>TRUE</SUPPORTS_CXX>
+  </compiler>
+
+  <!-- Container-specific overrides (conda-forge paths) -->
+  <compiler MACH="container">
+    <CPPDEFS>
+      <append MODEL="gptl"> -DHAVE_NANOTIME -DBIT64 -DHAVE_VPRINTF -DHAVE_BACKTRACE -DHAVE_SLASHPROC -DHAVE_COMM_F2C -DHAVE_TIMES -DHAVE_GETTIMEOFDAY </append>
+    </CPPDEFS>
+    <NETCDF_PATH>$ENV{CONDA_PREFIX}</NETCDF_PATH>
+    <PNETCDF_PATH>$ENV{CONDA_PREFIX}</PNETCDF_PATH>
+    <LDFLAGS>
+      <base> -L$ENV{CONDA_PREFIX}/lib </base>
+    </LDFLAGS>
+    <SLIBS>
+      <append> -lnetcdf -lnetcdff -llapack -lblas </append>
+    </SLIBS>
+  </compiler>
+
+</config_compilers>
