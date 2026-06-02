@@ -57,6 +57,9 @@ class TestCaseBuild:
             f"create_newcase failed:\n{result.stdout}\n{result.stderr}"
         )
 
+        inputdata = os.path.join(os.environ.get("CESMDATAROOT", "/home/user"), "inputdata")
+        os.makedirs(inputdata, exist_ok=True)
+
         result = run([str(case_path / "case.setup")], cwd=str(case_path))
         assert result.returncode == 0, (
             f"case.setup failed:\n{result.stdout}\n{result.stderr}"

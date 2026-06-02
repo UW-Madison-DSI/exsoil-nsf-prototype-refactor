@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential gfortran cmake m4 wget curl git subversion \
     liblapack-dev libblas-dev graphviz xmlstarlet \
     ca-certificates locales sudo \
+    perl libxml-libxml-perl \
     && locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
