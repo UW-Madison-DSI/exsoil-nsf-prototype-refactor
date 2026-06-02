@@ -5,7 +5,8 @@ channels:
 
 dependencies:
   # --- Python ---
-  - python >=3.11,<3.13
+  # Pin to 3.11: CIME 2.2.x uses 'import imp' which was removed in 3.12
+  - python >=3.11,<3.12
 
   # --- Compilers & build (needed for CESM case.build) ---
   - gfortran
