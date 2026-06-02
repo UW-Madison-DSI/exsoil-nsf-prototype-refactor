@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Platform Container Rebuild Report</title>
+<style>
+  :root {
+    --uw-red: #c5050c;
+    --uw-dark: #282728;
+    --uw-gray: #646569;
+    --uw-light: #f7f7f7;
+    --uw-blue: #0479a8;
+    --uw-green: #3d7a38;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--uw-dark);
+    line-height: 1.65;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+    background: #fff;
+  }
+  h1 {
+    font-size: 1.8rem;
+    border-bottom: 3px solid var(--uw-red);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  h2 {
+    font-size: 1.4rem;
+    color: var(--uw-red);
+    margin: 2rem 0 0.75rem;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 0.3rem;
+  }
+  h3 {
+    font-size: 1.1rem;
+    margin: 1.5rem 0 0.5rem;
+    color: var(--uw-dark);
+  }
+  p { margin: 0.6rem 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  th, td {
+    border: 1px solid #ddd;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+  }
+  th { background: var(--uw-light); font-weight: 600; }
+  code {
+    background: var(--uw-light);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.88em;
+    font-family: "SF Mono", "Fira Code", Menlo, monospace;
+  }
+  pre {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin: 1rem 0;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #fff;
+  }
+  .badge-pass { background: var(--uw-green); }
+  .badge-info { background: var(--uw-blue); }
+  .badge-warn { background: #d48a00; }
+  .inferred { font-style: italic; color: var(--uw-gray); }
+  .inferred::before { content: "Inferred: "; font-weight: 600; }
+
+  /* Architecture diagram */
+  .diagram {
+    display: flex;
+    gap: 0.5rem;
+    margin: 1.5rem 0;
+    flex-wrap: wrap;
+  }
+  .stage-box {
+    flex: 1;
+    min-width: 200px;
+    border: 2px solid var(--uw-dark);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .stage-header {
+    background: var(--uw-dark);
+    color: #fff;
+    padding: 0.4rem 0.75rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .stage-body {
+    padding: 0.75rem;
+    font-size: 0.85rem;
+  }
+  .stage-body ul { list-style: none; padding: 0; }
+  .stage-body li {
+    padding: 0.2rem 0;
+    border-bottom: 1px solid #eee;
+  }
+  .stage-body li:last-child { border-bottom: none; }
+  .stage-time {
+    font-size: 0.75rem;
+    color: var(--uw-gray);
+    margin-top: 0.5rem;
+  }
+  .arrow {
+    display: flex;
+    align-items: center;
+    font-size: 1.5rem;
+    color: var(--uw-gray);
+    padding: 0 0.25rem;
+  }
+
+  /* Test results bar */
+  .test-bar {
+    display: flex;
+    height: 28px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0.75rem 0;
+    border: 1px solid #ddd;
+  }
+  .test-segment {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  /* Timeline */
+  .timeline {
+    position: relative;
+    padding-left: 2rem;
+    margin: 1.5rem 0;
+  }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 0.5rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #ddd;
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+  }
+  .timeline-item::before {
+    content: "";
+    position: absolute;
+    left: -1.65rem;
+    top: 0.35rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--uw-red);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px var(--uw-red);
+  }
+  .timeline-hash {
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 0.8rem;
+    color: var(--uw-gray);
+  }
+  .timeline-msg {
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+  .timeline-detail {
+    font-size: 0.8rem;
+    color: var(--uw-gray);
+    margin-top: 0.15rem;
+  }
+  @media (max-width: 600px) {
+    .diagram { flex-direction: column; }
+    .arrow { transform: rotate(90deg); justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Multi-Platform Container Rebuild Report</h1>
+
+<h2>Section 1: Overview</h2>
+
+<h3>What was rebuilt and why</h3>
+<p>This project runs the NCAR CESM (Community Earth System Model) climate modeling framework inside a Docker container. Researchers pull the container image, launch it, and open JupyterLab in their browser to run analysis notebooks against CESM simulation data. The container packages everything needed: an operating system, scientific Fortran/C libraries, the CESM source code and build system, a full Python scientific stack (NumPy, xarray, cartopy, etc.), and JupyterLab itself.</p>
+
+<p>The original container image (<code>escomp/cesm-lab-neon</code>) was built three years ago on CentOS 8 (which lost security support in December 2021) and only supported Intel/AMD processors. It shipped Python 3.7 (end-of-life since June 2023) and hundreds of outdated packages. Most critically, it could not run natively on Apple Silicon Macs (M1/M2/M3/M4), which use a different processor architecture called ARM64. Team members on these machines had to run the container through a translation layer that was 2&ndash;3x slower and crashed frequently during computationally intensive operations like cartopy map rendering and CESM model compilation. The container was rebuilt from scratch on Ubuntu 24.04, with native support for both processor architectures, modern packages, and a reproducible build system.</p>
+
+<h3>What multi-platform support means</h3>
+<p>A Docker image is compiled code, and compiled code is specific to a processor architecture. An image built for Intel/AMD (called &ldquo;amd64&rdquo; or &ldquo;x86_64&rdquo;) contains machine instructions that ARM processors cannot execute directly, and vice versa. When you run an amd64 image on an ARM Mac, Docker uses a technology called <strong>QEMU emulation</strong> to translate instructions on the fly. This works, but it is slow, uses more memory, and can trigger subtle bugs in complex software.</p>
+
+<p>Multi-platform support means publishing a single image tag (like <code>latest</code>) that actually contains two architecture-specific images behind the scenes, organized in what Docker calls a <strong>manifest list</strong>. When someone runs <code>docker pull</code>, their Docker client automatically selects the correct image for their machine. An engineer on an Intel Linux server gets the amd64 image. An engineer on an M3 MacBook gets the arm64 image. Neither needs to know or care about the other architecture. The image tag, the <code>docker run</code> command, and all the documentation stay identical.</p>
+
+<h3>The approach</h3>
+<p>Rather than cross-compiling the old image, the team rebuilt the entire stack on a new foundation. The original image compiled five scientific libraries (MPICH, HDF5, NetCDF-C, NetCDF-Fortran, PNetCDF) from Fortran and C source code inside the container, a process that took 30&ndash;45 minutes and was architecture-specific. The rebuild replaced all of this with pre-built binary packages from conda-forge, a community package repository that publishes builds for both amd64 and arm64. This reduced build time to about five minutes and eliminated the most complex source of architecture-dependent code.</p>
+
+<p>The project also upgraded the CESM version from 2.2.0 to 2.2.2, trimmed the Python environment from approximately 400 packages to 35 direct dependencies, introduced reproducible lockfiles for both architectures, and created a three-tier automated test suite that validates the container on each platform.</p>
+
+<h3>What changed for downstream consumers</h3>
+<p>Nothing, operationally. The image is published to the same GitHub Container Registry address. <code>docker pull</code> and <code>docker run</code> commands are unchanged. On Apple Silicon Macs, the container now runs natively instead of through emulation, so it is faster, more stable, and does not crash during heavy computation. On Intel/AMD machines, the container works as before, with updated package versions. The only user-visible difference is that Python is now 3.11 (up from 3.7), JupyterLab is version 4 (up from 2), and package versions have jumped by 4&ndash;6 years.</p>
+
+<hr style="margin: 3rem 0; border: none; border-top: 2px solid var(--uw-red);">
+
+<h2>Section 2: Technical Detail</h2>
+
+<h3>Dockerfile architecture</h3>
+<p>The Dockerfile (<code>./Dockerfile</code>, 174 lines) uses a three-stage linear build. All stages derive from the first; there is no separate builder stage because CESM's <code>case.build</code> workflow requires compilers at runtime.</p>
+
+<div class="diagram">
+  <div class="stage-box">
+    <div class="stage-header">Stage 1: base</div>
+    <div class="stage-body">
+      <ul>
+        <li><code>FROM ubuntu:24.04</code></li>
+        <li>apt: gfortran, gcc, cmake, perl</li>
+        <li>Miniforge (arch-aware)</li>
+        <li>conda-lock explicit install</li>
+        <li>Optional Dask layer</li>
+      </ul>
+      <div class="stage-time">~5-6 min cold / cached</div>
+    </div>
+  </div>
+  <div class="arrow">&rarr;</div>
+  <div class="stage-box">
+    <div class="stage-header">Stage 2: cesm</div>
+    <div class="stage-body">
+      <ul>
+        <li>CESM 2.2.2 git clone</li>
+        <li>checkout_externals (12 repos)</li>
+        <li>PIO2 source patches</li>
+        <li>Machine config XML files</li>
+        <li>PE layout configs</li>
+      </ul>
+      <div class="stage-time">~2 min (network)</div>
+    </div>
+  </div>
+  <div class="arrow">&rarr;</div>
+  <div class="stage-box">
+    <div class="stage-header">Stage 3: app</div>
+    <div class="stage-body">
+      <ul>
+        <li>analytics_modules/</li>
+        <li>run_neon_v2.py</li>
+        <li>notebooks/</li>
+        <li>Remove bundled six.py</li>
+        <li>PYTHONPATH setup</li>
+      </ul>
+      <div class="stage-time">~seconds</div>
+    </div>
+  </div>
+</div>
+
+<h3>Base image selection</h3>
+<p>Decision documented in <a href="adr/0001-arm64-base-image.md">ADR-0001</a>. Six alternatives were evaluated:</p>
+<table>
+  <tr><th>Option</th><th>Multi-arch</th><th>Size</th><th>EOL</th><th>Community fit</th></tr>
+  <tr><td><strong>Ubuntu 24.04</strong> (chosen)</td><td>amd64, arm64 +4</td><td>~29 MB</td><td>2029/2036</td><td>Pangeo, Jupyter Stacks</td></tr>
+  <tr><td>AlmaLinux 9</td><td>amd64, arm64</td><td>~30 MB</td><td>2032</td><td>CERN, Fermilab</td></tr>
+  <tr><td>Rocky Linux 9</td><td>amd64, arm64</td><td>~44 MB</td><td>2032</td><td>CIQ HPC</td></tr>
+  <tr><td>Debian 12</td><td>amd64, arm64</td><td>~47 MB</td><td>2028 LTS</td><td>Less common for HPC</td></tr>
+  <tr><td>jupyter/scipy-notebook</td><td>amd64, arm64</td><td>~1.5 GB</td><td>Follows Ubuntu</td><td>Jupyter community</td></tr>
+  <tr><td>condaforge/miniforge3</td><td>amd64, arm64</td><td>~148 MB</td><td>Follows Ubuntu</td><td>Pangeo pattern</td></tr>
+</table>
+
+<h3>Architecture detection</h3>
+<p>The build uses <code>$(uname -m)</code> for architecture detection rather than Buildx <code>TARGETARCH</code>/<code>TARGETPLATFORM</code> variables. Under QEMU emulation, <code>uname -m</code> reports the emulated architecture correctly. This is used in two places:</p>
+<pre><code># Miniforge installer
+wget ... "Miniforge3-Linux-$(uname -m).sh"
+
+# Lockfile selection
+ARCH=$(uname -m)
+if [ "$ARCH" = "aarch64" ]; then LOCKFILE=...aarch64.lock;
+else LOCKFILE=...64.lock; fi</code></pre>
+
+<h3>CI integration</h3>
+<p>Single-job build in <code>.github/workflows/docker-publish.yml</code>:</p>
+<pre><code>steps:
+  - docker/setup-qemu-action@v3       # ARM64 emulation
+  - docker/setup-buildx-action@v3     # Multi-platform builder
+  - docker/build-push-action@v6
+      platforms: linux/amd64,linux/arm64
+      cache-from: type=gha
+      cache-to: type=gha,mode=max</code></pre>
+<p>No matrix builds; both architectures built in a single Buildx invocation. QEMU handles arm64 on amd64 CI runners. Layer cache uses GitHub Actions cache backend.</p>
+
+<h3>CESM build compatibility fixes</h3>
+<p>Six issues resolved to make CESM 2.2.2 compile with modern conda-forge GCC 15.x and NetCDF-C 4.9+ on arm64:</p>
+<table>
+  <tr><th>Issue</th><th>Root cause</th><th>Fix</th></tr>
+  <tr><td><code>rdtsc</code> asm error in GPTL</td><td>x86-only instruction</td><td>Removed <code>-DHAVE_NANOTIME -DBIT64</code></td></tr>
+  <tr><td>MPI type mismatch</td><td>GCC 10+ strict checking</td><td><code>-fallow-argument-mismatch</code></td></tr>
+  <tr><td>BOZ hex literal error</td><td>GCC 10+ strict BOZ</td><td><code>-fallow-invalid-boz</code></td></tr>
+  <tr><td><code>_FillValue</code> undeclared</td><td>NetCDF-C renamed macro</td><td><code>-D_FillValue=NC_FillValue</code></td></tr>
+  <tr><td>PIO2 filter API mismatch</td><td>NetCDF headers expose functions PIO2 doesn't implement</td><td><code>sed</code> patches on PIO Fortran files</td></tr>
+  <tr><td><code>cmake_minimum_required(3.0.2)</code></td><td>cmake 4.x removed compat &lt;3.5</td><td>Pin <code>cmake &gt;=3.28,&lt;4</code></td></tr>
+</table>
+
+<h3>Test results</h3>
+<p><span class="badge badge-pass">89/89 PASSED</span> <span class="badge badge-info">94 seconds</span> on native arm64</p>
+
+<div class="test-bar">
+  <div class="test-segment" style="width:70.8%; background: var(--uw-green);">Tier 0: 63 smoke</div>
+  <div class="test-segment" style="width:13.5%; background: var(--uw-blue);">Tier 1: 12 case</div>
+  <div class="test-segment" style="width:15.7%; background: #6c47a0;">Tier 2: 14 build+analysis</div>
+</div>
+
+<table>
+  <tr><th>Tier</th><th>Tests</th><th>Runtime</th><th>Coverage</th></tr>
+  <tr><td>0: Smoke</td><td>63</td><td>~4s</td><td>28 Python imports, CIME/CTSM modules, compilers, MPI, NetCDF libs, CESM install, env vars, dateutil/six regression</td></tr>
+  <tr><td>1: Case creation</td><td>12</td><td>~3s</td><td>query_config, create_newcase (I2000Clm50Sp/f19_g17), case.setup, xmlchange/xmlquery, run_neon_v2 CLI</td></tr>
+  <tr><td>2: Build + analysis</td><td>14</td><td>~85s</td><td>Full case.build (cesm.exe in 78s), NetCDF I/O, xarray workflows, cartopy rendering, Dask lazy I/O</td></tr>
+</table>
+
+<h3>Commit history</h3>
+<div class="timeline">
+  <div class="timeline-item">
+    <span class="timeline-hash">82d636a</span>
+    <div class="timeline-msg">Add ADRs for arm64 multi-arch container rebuild</div>
+    <div class="timeline-detail">4 ADRs: base image, build strategy, conda environment, distributed computing</div>
+  </div>
+  <div class="timeline-item">
+    <span class="timeline-hash">1fd9f21</span>
+    <div class="timeline-msg">Rebuild container for multi-arch on Ubuntu 24.04</div>
+    <div class="timeline-detail">23 files, +15,767 lines. New Dockerfile, lockfiles, configs, docs</div>
+  </div>
+  <div class="timeline-item">
+    <span class="timeline-hash">307d8e9</span>
+    <div class="timeline-msg">Add container validation test suite; pin Python to 3.11</div>
+    <div class="timeline-detail">89-test framework across 3 tiers. CIME needs Python &lt;3.12</div>
+  </div>
+  <div class="timeline-item">
+    <span class="timeline-hash">539a92b</span>
+    <div class="timeline-msg">Fix container config issues found by test suite</div>
+    <div class="timeline-detail">default_run_suffix, ctsm.download_utils, PYTHONPATH, USER env</div>
+  </div>
+  <div class="timeline-item">
+    <span class="timeline-hash">9639015</span>
+    <div class="timeline-msg">Add XML::LibXML for CESM namelists</div>
+    <div class="timeline-detail">Perl module needed by CLM's build-namelist script</div>
+  </div>
+  <div class="timeline-item">
+    <span class="timeline-hash">5b625dd</span>
+    <div class="timeline-msg">Fix CESM case.build on arm64 with modern toolchain</div>
+    <div class="timeline-detail">6 compat fixes: rdtsc, MPI types, BOZ, _FillValue, PIO2 filters, cmake pin</div>
+  </div>
+</div>
+
+<h3>Image metrics</h3>
+<table>
+  <tr><th>Metric</th><th>Value</th></tr>
+  <tr><td>Uncompressed size (arm64)</td><td>6.83 GB</td></tr>
+  <tr><td>Layer count</td><td>28</td></tr>
+  <tr><td>Dominant layers</td><td>conda env (~800 MB), CESM source tree (~2 GB), Ubuntu + apt (~550 MB)</td></tr>
+  <tr><td>Build time (cold, native arm64)</td><td>~8 min</td></tr>
+  <tr><td>Build time (code-only change)</td><td>~10 seconds</td></tr>
+  <tr><td>case.build (native arm64)</td><td>78 seconds</td></tr>
+</table>
+
+<h3>Known limitations</h3>
+<ol style="margin: 0.75rem 0; padding-left: 1.5rem; font-size: 0.95rem;">
+  <li><strong>No CI test integration yet.</strong> Test suite is manual; adding tier0+tier1 to the GHA workflow is a natural follow-up.</li>
+  <li><strong>amd64 not locally tested.</strong> Only arm64 exercised through the test suite. amd64 relies on CI build success.</li>
+  <li><strong>PIO2 patches are fragile.</strong> <code>sed</code> macro renames will need updating if PIO2 or NetCDF-C versions change.</li>
+  <li><strong>Python pinned to 3.11.</strong> CIME 2.2.x uses <code>import imp</code> removed in 3.12. CESM 3.x fixes this.</li>
+  <li><strong>No BuildKit cache mounts.</strong> <code>--mount=type=cache</code> for conda packages could speed up cache-miss rebuilds.</li>
+  <li><strong>Large image size.</strong> CESM source tree dominates; in-tree build model prevents separating build tools from runtime.</li>
+</ol>
+
+</body>
+</html>
