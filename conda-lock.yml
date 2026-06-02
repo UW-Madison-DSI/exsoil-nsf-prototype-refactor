@@ -13,8 +13,8 @@
 version: 1
 metadata:
   content_hash:
-    linux-64: db0fc057f2ea48e9f7ac4dc7a5de37ce7fbbdaf23c4596ba0b620d4235e4c6d2
-    linux-aarch64: ab97ee1a447d44a198ce4dfde0b790a1b658996b5bdfa9e8c78c3dd9b31e4227
+    linux-64: 8b84bbae8b77996833a23c4a662a58377125f2e68794724687737a1acf257309
+    linux-aarch64: 13d917801d0c888fe4184b57d69e4725365f974010cf8a1a3fba7c0eb870f477
   channels:
   - url: conda-forge
     used_env_vars: []
@@ -1859,48 +1859,48 @@ package:
   category: main
   optional: false
 - name: cmake
-  version: 4.3.3
+  version: 3.31.8
   manager: conda
   platform: linux-64
   dependencies:
     __glibc: '>=2.17,<3.0.a0'
     bzip2: '>=1.0.8,<2.0a0'
-    libcurl: '>=8.20.0,<9.0a0'
-    libexpat: '>=2.8.1,<3.0a0'
+    libcurl: '>=8.14.1,<9.0a0'
+    libexpat: '>=2.7.1,<3.0a0'
     libgcc: '>=14'
-    liblzma: '>=5.8.3,<6.0a0'
+    liblzma: '>=5.8.1,<6.0a0'
     libstdcxx: '>=14'
     libuv: '>=1.51.0,<2.0a0'
-    libzlib: '>=1.3.2,<2.0a0'
-    ncurses: '>=6.6,<7.0a0'
+    libzlib: '>=1.3.1,<2.0a0'
+    ncurses: '>=6.5,<7.0a0'
     rhash: '>=1.4.6,<2.0a0'
     zstd: '>=1.5.7,<1.6.0a0'
-  url: https://conda.anaconda.org/conda-forge/linux-64/cmake-4.3.3-hc85cc9f_0.conda
+  url: https://conda.anaconda.org/conda-forge/linux-64/cmake-3.31.8-hc85cc9f_0.conda
   hash:
-    md5: 30a266b5d91bc45fccbcc45588b2db79
-    sha256: 796276f96ea27acaba1f25755977f6c12dfbc886fd1db713263c795184168f59
+    md5: 057e16a12847eea846ecf99710d3591b
+    sha256: 10660ed21b9d591f8306028bd36212467b94f23bc2f78faec76524f6ee592613
   category: main
   optional: false
 - name: cmake
-  version: 4.3.3
+  version: 3.31.8
   manager: conda
   platform: linux-aarch64
   dependencies:
     bzip2: '>=1.0.8,<2.0a0'
-    libcurl: '>=8.20.0,<9.0a0'
-    libexpat: '>=2.8.1,<3.0a0'
+    libcurl: '>=8.14.1,<9.0a0'
+    libexpat: '>=2.7.1,<3.0a0'
     libgcc: '>=14'
-    liblzma: '>=5.8.3,<6.0a0'
+    liblzma: '>=5.8.1,<6.0a0'
     libstdcxx: '>=14'
     libuv: '>=1.51.0,<2.0a0'
-    libzlib: '>=1.3.2,<2.0a0'
-    ncurses: '>=6.6,<7.0a0'
+    libzlib: '>=1.3.1,<2.0a0'
+    ncurses: '>=6.5,<7.0a0'
     rhash: '>=1.4.6,<2.0a0'
     zstd: '>=1.5.7,<1.6.0a0'
-  url: https://conda.anaconda.org/conda-forge/linux-aarch64/cmake-4.3.3-hc9d863e_0.conda
+  url: https://conda.anaconda.org/conda-forge/linux-aarch64/cmake-3.31.8-hc9d863e_0.conda
   hash:
-    md5: 51ed178d88a6b6011ef73684fb6cb5a3
-    sha256: 2bd6cd5742ff206e61b9732bd8d84f820d10f5831b4d16276b9860b064a271f8
+    md5: 855e698fd08794a573cd6104be8da4d0
+    sha256: 91cbfd13132b7253a6ef001292f5cf59deac38d2cbc86d6c1ad6ebf344cd998c
   category: main
   optional: false
 - name: colorcet

@@ -12,7 +12,9 @@ dependencies:
   - gfortran
   - gcc
   - gxx
-  - cmake
+  # Pin cmake <4: CESM 2.2.2's PIO uses cmake_minimum_required(VERSION 3.0.2)
+  # which cmake 4.x rejects (compat with <3.5 removed)
+  - cmake >=3.28,<4
   - make
   - m4
 

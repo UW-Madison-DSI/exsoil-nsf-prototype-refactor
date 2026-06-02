@@ -84,7 +84,7 @@ class TestCaseCreation:
     def test_case_setup(self, case_dir):
         inputdata = os.path.join(os.environ.get("CESMDATAROOT", "/home/user"), "inputdata")
         os.makedirs(inputdata, exist_ok=True)
-        result = run([str(case_dir / "case.setup")], cwd=str(case_dir))
+        result = run(["./case.setup"], cwd=str(case_dir))
         assert result.returncode == 0, (
             f"case.setup failed:\n{result.stdout}\n{result.stderr}"
         )

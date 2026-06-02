@@ -94,7 +94,15 @@ RUN groupadd -r cesm \
 RUN git clone --branch ${CESM_TAG} --depth 1 \
         https://github.com/ESCOMP/cesm.git ${CESM_ROOT} \
     && cd ${CESM_ROOT} \
-    && ./manage_externals/checkout_externals
+    && ./manage_externals/checkout_externals \
+    && for f in ${CESM_ROOT}/cime/src/externals/pio2/src/flib/pio_nf.F90 \
+                ${CESM_ROOT}/cime/src/externals/pio2/src/flib/pio.F90; do \
+         sed -i 's/PIO_HAS_PAR_FILTERS/DISABLED_PIO_HAS_PAR_FILTERS/g' "$f"; \
+         sed -i 's/NC_HAS_MULTIFILTERS/DISABLED_NC_HAS_MULTIFILTERS/g' "$f"; \
+         sed -i 's/NC_HAS_QUANTIZE/DISABLED_NC_HAS_QUANTIZE/g' "$f"; \
+         sed -i 's/NC_HAS_ZSTD/DISABLED_NC_HAS_ZSTD/g' "$f"; \
+         sed -i 's/NC_HAS_BZ/DISABLED_NC_HAS_BZ/g' "$f"; \
+       done
 
 # Install container machine configs (conda-forge paths, not /usr/local).
 # See cesm-config/machines/ for the adapted XML files.

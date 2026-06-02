@@ -54,13 +54,19 @@
   <!-- Container-specific overrides (conda-forge paths) -->
   <compiler MACH="container">
     <CPPDEFS>
-      <append MODEL="gptl"> -DHAVE_NANOTIME -DBIT64 -DHAVE_VPRINTF -DHAVE_BACKTRACE -DHAVE_SLASHPROC -DHAVE_COMM_F2C -DHAVE_TIMES -DHAVE_GETTIMEOFDAY </append>
+      <append MODEL="gptl"> -DHAVE_VPRINTF -DHAVE_BACKTRACE -DHAVE_SLASHPROC -DHAVE_COMM_F2C -DHAVE_TIMES -DHAVE_GETTIMEOFDAY </append>
     </CPPDEFS>
+    <CFLAGS>
+      <append> -D_FillValue=NC_FillValue </append>
+    </CFLAGS>
     <NETCDF_PATH>$ENV{CONDA_PREFIX}</NETCDF_PATH>
     <PNETCDF_PATH>$ENV{CONDA_PREFIX}</PNETCDF_PATH>
     <LDFLAGS>
       <base> -L$ENV{CONDA_PREFIX}/lib </base>
     </LDFLAGS>
+    <FFLAGS>
+      <append> -fallow-argument-mismatch -fallow-invalid-boz </append>
+    </FFLAGS>
     <SLIBS>
       <append> -lnetcdf -lnetcdff -llapack -lblas </append>
     </SLIBS>
