@@ -98,6 +98,7 @@ Nothing currently in progress. The feature branch
 
 | Item | Description |
 |------|-------------|
+| **Input data caching on university S3** | A first-time NEON simulation downloads 2+ GB of input data from NCAR's FTP servers, which is slow and adds several minutes to the first run. Investigate caching frequently-used CTSM input data (surface datasets, forcing files for common NEON sites) on UW-Madison's campus S3 (`campus.s3.wisc.edu`) and providing a FastAPI service that delivers chunked downloads. This could significantly reduce first-run latency, particularly for workshop/classroom settings where many users pull the same data simultaneously. The `run_neon_v2.py` S3 pathway (`--s3-input-bucket`, `--s3-endpoint-url`) already supports non-AWS S3; the infrastructure question is standing up the API and populating the cache. |
 | **CESM 3.x evaluation** | When CESM 3.x ships (est. late 2026), evaluate whether to maintain a separate coupled-model container for experiments requiring atmosphere-land feedbacks. |
 | **NEON observation pipeline** | Build an automated pipeline to download, process, and format NEON tower observations for model-data comparison. |
 | **Pre-built case images** | Explore shipping a container with a pre-compiled CLM binary for common compsets to eliminate the `case.build` step for users. |
