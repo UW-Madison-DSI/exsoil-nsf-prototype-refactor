@@ -172,6 +172,158 @@
 <div class="subtitle">ExSOIL NSF Prototype &middot; June 2026 &middot; Steven Wangen</div>
 <div class="status-badge">Open for Discussion</div>
 
+<h2>Executive Summary</h2>
+
+<p>The project's Docker container was recently rebuilt from scratch on Ubuntu 24.04 with native support for both Intel/AMD (amd64) and Apple Silicon (arm64) processors. The multi-arch infrastructure, conda environment, 89-test validation suite, and CESM Fortran build system are all working. What is missing is the <strong>NEON tower site workflow</strong>, the project's primary use case.</p>
+
+<p>The previous container (<code>escomp/cesm-lab-neon</code>) was an amd64-only, custom image that mixed the CESM 2.2 framework with a newer CTSM development branch to get NEON support. This was a one-off build by an NCAR developer, not part of any official CESM release. <strong>NEON support was never part of the CESM 2.x development pipeline.</strong> It was developed exclusively on CTSM's master branch starting in February 2021, and will only enter CESM when version 3.x ships (currently in alpha).</p>
+
+<p>Our rebuild used the official CESM 2.2.2 release, which is clean and reproducible but does not include NEON because the 2.2 branch predates that work entirely. We did not lose something that was there before; the old container was a non-standard assembly.</p>
+
+<p>This brief presents five options for restoring NEON functionality:</p>
+
+<table>
+  <tr><th>Option</th><th>Approach</th><th>Effort</th><th>NEON available now?</th></tr>
+  <tr><td><strong>A-C</strong></td><td>Bolt NEON onto our existing CESM 2.2.2 container (graft config files, upgrade just CLM, or maintain our own site configs)</td><td>Low to medium-high</td><td>Yes, with validation risk</td></tr>
+  <tr><td><strong>D</strong></td><td>Upgrade to CESM 3.x (full coupled Earth system with NEON natively)</td><td>High</td><td>No (CESM 3.x not yet released)</td></tr>
+  <tr><td><strong>E</strong></td><td>Drop CESM, use standalone CTSM (what NCAR built the NEON workflow for)</td><td>Medium</td><td>Yes</td></tr>
+</table>
+
+<p>The multi-arch Dockerfile, conda environment, and test framework we built carry over to any option. The choice depends on the project's scope, timeline, and whether fully coupled atmosphere-land-ocean simulations are on the roadmap. Option E trades away coupled simulation capability (which the project does not currently use) for a cleaner, smaller, NCAR-recommended path to NEON support.</p>
+
+<h2>Background: How CESM, CLM, and NEON Fit Together</h2>
+
+<p>Before diving into the problem, it helps to understand the system architecture. <strong>CESM</strong> (Community Earth System Model) is a modular climate simulation framework maintained by NCAR. It models the entire Earth system by coupling separate components that each handle a different domain:</p>
+
+<table>
+  <tr><th>Component</th><th>Domain</th><th>What it simulates</th></tr>
+  <tr><td><strong>CAM</strong></td><td>Atmosphere</td><td>Weather, radiation, clouds, precipitation</td></tr>
+  <tr><td><strong>CLM</strong></td><td>Land surface</td><td>Soil temperature/moisture, vegetation, carbon cycling, snow, rivers</td></tr>
+  <tr><td><strong>POP</strong></td><td>Ocean</td><td>Ocean circulation, heat transport, biogeochemistry</td></tr>
+  <tr><td><strong>CICE</strong></td><td>Sea ice</td><td>Ice formation, melting, drift</td></tr>
+  <tr><td><strong>CISM</strong></td><td>Ice sheets</td><td>Glaciers, Greenland/Antarctic ice dynamics</td></tr>
+  <tr><td><strong>MOSART</strong></td><td>Rivers</td><td>Freshwater routing from land to ocean</td></tr>
+</table>
+
+<p>These components exchange energy, water, and momentum through a central coupler at each time step. For a full simulation you run them all together, but for land-focused research (like this project) you can run CLM by itself with prescribed atmospheric forcing data, which is much cheaper computationally.</p>
+
+<h3>CLM and CTSM</h3>
+<p><strong>CLM</strong> (Community Land Model) is the component most relevant to this project. It simulates what happens at and below the land surface: how soil heats and cools, how water moves through soil layers, how plants grow and exchange carbon with the atmosphere, and how snow accumulates and melts. <strong>CTSM</strong> (Community Terrestrial Systems Model) is the standalone version of CLM, maintained in its own Git repository. The names are often used interchangeably; technically CLM is the component within CESM and CTSM is the broader standalone project that contains it.</p>
+
+<h3>NEON and the tower workflow</h3>
+<p><strong>NEON</strong> (National Ecological Observatory Network) operates 81 instrumented field sites across the United States. Each site has a tower equipped with sensors that continuously measure things like air temperature, humidity, wind speed, soil temperature at multiple depths, soil moisture, and carbon dioxide fluxes between the land and atmosphere. These measurements provide ground truth for testing whether CLM's predictions match reality at specific locations.</p>
+
+<p><strong>The NEON tower workflow</strong> connects CLM to these real-world observations. The idea is: take CLM, configure it for a specific NEON tower site (telling it the exact grid cell, soil properties, vegetation type, and local conditions), feed it observed meteorological data from that tower as atmospheric forcing, run the simulation, then compare CLM's predicted soil temperatures, moisture, and carbon fluxes against what the tower actually measured. This is the primary use case for this project's notebooks.</p>
+
+<h3>CIME and usermods</h3>
+<p><strong>CIME</strong> (Common Infrastructure for Modeling the Earth) is the build and case management system that orchestrates all of this. When you run commands like <code>create_newcase</code>, <code>case.setup</code>, and <code>case.build</code>, you are using CIME. It handles Fortran compilation, namelist generation, MPI configuration, and job submission.</p>
+
+<p><strong>Usermods</strong> are per-site configuration bundles that tell CIME how to set up CLM for a specific NEON tower location. Each site's usermods directory (e.g., <code>NEON/ABBY/</code>, <code>NEON/BART/</code>) contains files that specify the grid cell coordinates, surface dataset paths, and namelist overrides for that site. Without usermods, you would have to manually configure all of these details every time you create a case for a NEON site.</p>
+
+<h3>History: When and where NEON support was developed</h3>
+
+<p>The NEON tower workflow was <strong>never part of any CESM 2.x release</strong>. It was developed specifically for standalone CTSM, on a separate development branch, after the CESM 2.2 release line had already been cut.</p>
+
+<div style="margin: 1.5rem 0; padding: 1.25rem; background: var(--uw-light); border-radius: 8px; border: 1px solid #ddd;">
+<h4 style="margin: 0 0 1rem; font-size: 0.95rem; color: var(--uw-gray); text-transform: uppercase; letter-spacing: 0.05em;">CESM / CTSM Version Lineage</h4>
+<div style="position: relative; font-size: 0.85rem;">
+
+<!-- Timeline axis -->
+<div style="position: relative; margin-left: 1rem; padding-left: 2rem; border-left: 3px solid #ccc;">
+
+<!-- CESM 2.2 branch -->
+<div style="margin-bottom: 1.5rem; position: relative;">
+<div style="position: absolute; left: -2.65rem; top: 0.2rem; width: 12px; height: 12px; border-radius: 50%; background: var(--uw-dark);"></div>
+<div><strong>CESM 2.2 released</strong></div>
+<div style="color: var(--uw-gray);">Pins CLM to <code style="font-size: 0.8rem;">release-cesm2.2.04</code> (from <code style="font-size: 0.8rem;">release-clm5.0</code> line)</div>
+<div style="margin-top: 0.3rem; padding: 0.4rem 0.6rem; background: #fff; border: 1px solid #ddd; border-radius: 4px; display: inline-block;">
+  No NEON support. Never will have it on this branch.
+</div>
+</div>
+
+<!-- NEON development starts -->
+<div style="margin-bottom: 1.5rem; position: relative;">
+<div style="position: absolute; left: -2.65rem; top: 0.2rem; width: 12px; height: 12px; border-radius: 50%; background: var(--uw-green);"></div>
+<div><strong>Feb 2021</strong> &mdash; NEON usermods development begins</div>
+<div style="color: var(--uw-gray);">On CTSM <code style="font-size: 0.8rem;">master</code> branch (ctsm5.1.dev line), <em>not</em> the clm5.0 release line</div>
+<div style="color: var(--uw-gray); font-size: 0.8rem;">PR <a href="https://github.com/ESCOMP/CTSM/pull/1278">#1278</a>: "Adds support for NEON tower data sites." Merged May 2021.</div>
+</div>
+
+<!-- NEON active dev -->
+<div style="margin-bottom: 1.5rem; position: relative;">
+<div style="position: absolute; left: -2.65rem; top: 0.2rem; width: 12px; height: 12px; border-radius: 50%; background: var(--uw-green);"></div>
+<div><strong>2021-2022</strong> &mdash; Active NEON development on CTSM master</div>
+<div style="color: var(--uw-gray);">Surface datasets, batch wrapper, UI improvements (PRs #1375, #1444, #1467, #1474, #1539)</div>
+</div>
+
+<!-- escomp/cesm-lab-neon image -->
+<div style="margin-bottom: 1.5rem; position: relative;">
+<div style="position: absolute; left: -2.65rem; top: 0.2rem; width: 12px; height: 12px; border-radius: 50%; background: var(--uw-orange);"></div>
+<div><strong>~2022</strong> &mdash; <code>escomp/cesm-lab-neon</code> Docker image published</div>
+<div style="color: var(--uw-gray);">Custom build by NCAR developer. Mixed CESM 2.2 framework with a newer CTSM dev branch that had NEON support. Not built from the ESCOMP-Containers repo. No record of which exact CTSM tag was used.</div>
+</div>
+
+<!-- First NEON release -->
+<div style="margin-bottom: 1.5rem; position: relative;">
+<div style="position: absolute; left: -2.65rem; top: 0.2rem; width: 12px; height: 12px; border-radius: 50%; background: var(--uw-green);"></div>
+<div><strong>Nov 2022</strong> &mdash; First NEON-tagged CTSM release (<code>ctsm5.1.dev114</code>)</div>
+<div style="color: var(--uw-gray);">"NEON release: Some NEON updates fixing AG sites, update MOSART, small fixes."</div>
+</div>
+
+<!-- Our rebuild -->
+<div style="margin-bottom: 1.5rem; position: relative;">
+<div style="position: absolute; left: -2.65rem; top: 0.2rem; width: 12px; height: 12px; border-radius: 50%; background: var(--uw-red);"></div>
+<div><strong>Jun 2026</strong> &mdash; Our multi-arch rebuild</div>
+<div style="color: var(--uw-gray);">Used clean CESM 2.2.2 checkout. Its CLM (<code style="font-size: 0.8rem;">release-cesm2.2.04</code>) is on the <code style="font-size: 0.8rem;">release-clm5.0</code> line, which never received NEON support.</div>
+</div>
+
+<!-- CESM 3.x -->
+<div style="position: relative;">
+<div style="position: absolute; left: -2.65rem; top: 0.2rem; width: 12px; height: 12px; border-radius: 50%; background: #aaa; border: 2px dashed #888;"></div>
+<div><strong>Future</strong> &mdash; CESM 3.x (in alpha)</div>
+<div style="color: var(--uw-gray);">Will incorporate CTSM master, including NEON support natively. Not yet released.</div>
+</div>
+
+</div><!-- end timeline -->
+
+<!-- Branch diagram -->
+<div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #ddd;">
+<div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+  <div style="flex: 1; min-width: 200px;">
+    <div style="font-weight: 700; margin-bottom: 0.3rem;">release-clm5.0 line</div>
+    <div style="padding: 0.5rem; background: #fde8e8; border: 1px solid var(--uw-red); border-radius: 4px; font-size: 0.8rem;">
+      release-cesm2.2.04 &rarr; ... &rarr; release-clm5.0.37 (May 2024)<br>
+      <strong>Maintenance patches only. No NEON. No new features.</strong><br>
+      This is what CESM 2.2.2 uses.
+    </div>
+  </div>
+  <div style="flex: 1; min-width: 200px;">
+    <div style="font-weight: 700; margin-bottom: 0.3rem;">CTSM master (ctsm5.x)</div>
+    <div style="padding: 0.5rem; background: #e8f5e8; border: 1px solid var(--uw-green); border-radius: 4px; font-size: 0.8rem;">
+      ctsm5.1.dev &rarr; ctsm5.2 &rarr; current<br>
+      <strong>Active development. NEON support since Feb 2021.</strong><br>
+      This feeds into standalone CTSM and future CESM 3.x.
+    </div>
+  </div>
+</div>
+</div>
+
+</div><!-- end diagram container -->
+</div>
+
+<p>There is no evidence of plans to backport NEON support to CESM 2.x. NCAR's <a href="https://escomp.github.io/CTSM/users_guide/running-single-points/supported-tower-sites.html">official CTSM documentation</a> and the <a href="https://github.com/NCAR/CTSM-Tutorial">NCAR CTSM Tutorial</a> (including a <code>NEON_Tutorial_2023</code> branch) frame NEON exclusively as a standalone CTSM workflow.</p>
+
+<h3>How the original container worked</h3>
+<p>The original <code>escomp/cesm-lab-neon</code> Docker image (published on Docker Hub by NCAR developer <code>bdobbins</code> around 2022, 1.72 GB, amd64-only) was a <strong>custom assembly</strong> that does not correspond to any standard CESM release. It was not built from the <a href="https://github.com/ESCOMP/ESCOMP-Containers">ESCOMP-Containers</a> repository (which has no NEON references). It appears to have been built separately using a development CTSM branch with NEON support, layered onto a CESM 2.2-era framework. NCAR's <a href="https://github.com/NCAR/ncar-neon-books">ncar-neon-books</a> documentation references the image but does not document which CTSM tag was used inside.</p>
+
+<h3>What changed in the rebuild</h3>
+<p>When we rebuilt the container for multi-architecture support, we replaced the old custom ESCOMP image with a clean CESM 2.2.2 checkout from GitHub. This is a reproducible, officially tagged release, but its CLM component (<code>release-cesm2.2.04</code>) is part of the <code>release-clm5.0</code> line that predates NEON development entirely.</p>
+
+<div class="callout">
+  <div class="callout-title">Key insight</div>
+  <p>We did not lose something that was there before. CESM 2.2 never had NEON support. The old container was a non-standard build that mixed components from different version lines. Our rebuild used a clean checkout, which is better for maintainability but does not include the NEON customization that was grafted onto the old image. This strengthens the case for <strong>Option E (standalone CTSM)</strong>, since that is how NCAR actually intends NEON to be used.</p>
+</div>
+
 <h2>Problem</h2>
 
 <div class="callout">
@@ -300,6 +452,65 @@ run_neon_v2: error: argument --neon-sites: invalid choice: 'ABBY' (choose from '
   </div>
 </div>
 
+<div class="option-card">
+  <div class="option-header">
+    <span>Option E: Replace CESM with standalone CTSM</span>
+    <span><span class="tag tag-effort-med">Medium effort</span> <span class="tag tag-risk-med">Moderate risk</span></span>
+  </div>
+  <div class="option-body">
+    <p>Drop the full CESM checkout and replace it with a standalone CTSM checkout. CTSM has its own <code>Externals.cfg</code> that pulls in only what land-surface modeling needs: CIME, DATM, MOSART, and stub components. It does not pull in CAM, POP, CICE, CISM, or WW3. Current CTSM releases include the NEON tower workflow natively.</p>
+
+    <p>This reframes the question: instead of "how do we get NEON support into CESM 2.2.2," it asks <strong>"do we actually need CESM, or is CTSM sufficient?"</strong></p>
+
+    <p><strong>What CTSM standalone includes:</strong></p>
+    <table>
+      <tr><th>Component</th><th>Purpose</th><th>Needed?</th></tr>
+      <tr><td>CLM/CTSM</td><td>Land model (soil, vegetation, carbon)</td><td><span class="check">Yes</span> (the core)</td></tr>
+      <tr><td>CIME</td><td>Build system, case management</td><td><span class="check">Yes</span></td></tr>
+      <tr><td>DATM</td><td>Data atmosphere (feeds observed weather to CLM)</td><td><span class="check">Yes</span></td></tr>
+      <tr><td>MOSART</td><td>River routing</td><td><span class="check">Yes</span></td></tr>
+      <tr><td>Stubs</td><td>Placeholder ocean/ice/wave</td><td><span class="check">Yes</span> (required by coupler)</td></tr>
+      <tr><td>FATES</td><td>Vegetation demographics (optional)</td><td><span class="maybe">Possibly</span> for future work</td></tr>
+    </table>
+
+    <p><strong>What would be lost:</strong></p>
+    <table>
+      <tr><th>Component</th><th>Impact of losing it</th></tr>
+      <tr><td>CAM (atmosphere)</td><td>None for current workflows. The project uses observed forcing data, not a simulated atmosphere.</td></tr>
+      <tr><td>POP (ocean)</td><td>None. No ocean modeling in the project. NEON workflow uses a stub ocean.</td></tr>
+      <tr><td>CICE (sea ice)</td><td>None. Not relevant to land surface research at tower sites.</td></tr>
+      <tr><td>CISM (ice sheets)</td><td>None. Glacier/ice sheet modeling is outside scope.</td></tr>
+      <tr><td><strong>Fully coupled simulations</strong></td><td><strong>This is the significant loss.</strong> Without full CESM, you cannot run experiments where land surface changes (deforestation, irrigation) feed back into the atmosphere and alter precipitation. The land model receives prescribed weather and cannot influence it. For the current NEON workflow this is fine. But if the project ever expands to land-atmosphere feedbacks, regional climate impacts, or paleoclimate scenarios, you would need full CESM coupling.</td></tr>
+    </table>
+
+    <p>The project currently runs CLM in "I-compset" mode (land-only with data atmosphere), which is exactly what standalone CTSM is designed for. The full CESM components are present in the current container but never compiled or executed. They consume ~3-4 GB of source code for no functional benefit.</p>
+
+    <div class="callout" style="border-left-color: var(--uw-blue); background: #f0f7fb;">
+      <div class="callout-title" style="color: var(--uw-blue);">Scope implication</div>
+      <p>Moving to CTSM standalone is a statement about the project's scope: "we are a land surface modeling project, not a coupled climate modeling project." If that scope might expand in the future, keeping full CESM preserves optionality even if unused today.</p>
+    </div>
+
+    <p><strong>Pros:</strong></p>
+    <ul>
+      <li>NEON tower workflow included natively; this is what CTSM is built for</li>
+      <li>Dramatically smaller image (~3-4 GB less source code)</li>
+      <li>Current Python support (newer CIME works with 3.12+); no 3.11 pin</li>
+      <li>Newer PIO and CIME; source patches and GCC workarounds may be unnecessary</li>
+      <li>Aligns with how NCAR recommends running NEON tower experiments</li>
+      <li>Simpler dependency tree; fewer components = fewer version conflicts</li>
+    </ul>
+    <p><strong>Cons:</strong></p>
+    <ul>
+      <li>Loses ability to run fully coupled simulations if project scope expands</li>
+      <li><code>run_neon_v2.py</code> path assumptions need updating for CTSM directory layout</li>
+      <li>Machine configs need porting to CTSM's version of CIME</li>
+      <li>GCC compatibility flags may or may not still be needed; requires testing</li>
+      <li>89-test suite needs re-validation</li>
+    </ul>
+    <p><strong>Timeline:</strong> Days. Comparable to Option B, but with a cleaner result. The Dockerfile stages and conda environment carry over unchanged; only the CESM clone stage and machine configs need rework.</p>
+  </div>
+</div>
+
 <h2>Comparison</h2>
 
 <table class="matrix">
@@ -309,6 +520,7 @@ run_neon_v2: error: argument --neon-sites: invalid choice: 'ABBY' (choose from '
     <th>B: Newer CLM tag</th>
     <th>C: Bundle in repo</th>
     <th>D: CESM 3.x</th>
+    <th>E: CTSM standalone</th>
   </tr>
   <tr>
     <td>Effort</td>
@@ -316,10 +528,12 @@ run_neon_v2: error: argument --neon-sites: invalid choice: 'ABBY' (choose from '
     <td><span class="maybe">Medium</span></td>
     <td><span class="maybe">Medium-high</span></td>
     <td><span class="cross">High</span></td>
+    <td><span class="maybe">Medium</span></td>
   </tr>
   <tr>
     <td>NEON sites work</td>
     <td><span class="maybe">Likely</span></td>
+    <td><span class="check">Yes</span></td>
     <td><span class="check">Yes</span></td>
     <td><span class="check">Yes</span></td>
     <td><span class="check">Yes</span></td>
@@ -329,7 +543,8 @@ run_neon_v2: error: argument --neon-sites: invalid choice: 'ABBY' (choose from '
     <td><span class="check">Yes</span></td>
     <td><span class="maybe">Unknown</span></td>
     <td><span class="check">Yes</span></td>
-    <td><span class="cross">Must re-validate</span></td>
+    <td><span class="cross">Re-validate</span></td>
+    <td><span class="cross">Re-validate</span></td>
   </tr>
   <tr>
     <td>Fixes Python 3.11 pin</td>
@@ -337,6 +552,7 @@ run_neon_v2: error: argument --neon-sites: invalid choice: 'ABBY' (choose from '
     <td><span class="cross">No</span></td>
     <td><span class="cross">No</span></td>
     <td><span class="check">Yes</span></td>
+    <td><span class="maybe">Likely</span></td>
   </tr>
   <tr>
     <td>Fixes PIO2 patches</td>
@@ -344,12 +560,14 @@ run_neon_v2: error: argument --neon-sites: invalid choice: 'ABBY' (choose from '
     <td><span class="cross">No</span></td>
     <td><span class="cross">No</span></td>
     <td><span class="check">Yes</span></td>
+    <td><span class="maybe">Likely</span></td>
   </tr>
   <tr>
     <td>Community-maintained</td>
     <td><span class="maybe">Partial</span></td>
     <td><span class="check">Yes</span></td>
     <td><span class="cross">No</span></td>
+    <td><span class="check">Yes</span></td>
     <td><span class="check">Yes</span></td>
   </tr>
   <tr>
@@ -358,20 +576,49 @@ run_neon_v2: error: argument --neon-sites: invalid choice: 'ABBY' (choose from '
     <td><span class="maybe">Moderate</span></td>
     <td><span class="check">Low</span></td>
     <td><span class="cross">High</span></td>
+    <td><span class="maybe">Moderate</span></td>
+  </tr>
+  <tr>
+    <td>Image size reduction</td>
+    <td>None</td>
+    <td>None</td>
+    <td>None</td>
+    <td>None</td>
+    <td><span class="check">~3-4 GB smaller</span></td>
+  </tr>
+  <tr>
+    <td>Coupled simulations</td>
+    <td><span class="check">Preserved</span></td>
+    <td><span class="check">Preserved</span></td>
+    <td><span class="check">Preserved</span></td>
+    <td><span class="check">Preserved</span></td>
+    <td><span class="cross">Lost</span></td>
   </tr>
 </table>
 
 <h2>Questions for Discussion</h2>
 
 <ol class="question-list">
-  <li><strong>Which NEON sites does the project actively use?</strong> If it's 3-5 sites, Option C is attractive. If many sites or all 81, Options A or B scale better.</li>
-  <li><strong>How tightly coupled is <code>run_neon_v2.py</code> to CESM 2.2.x internals?</strong> If it mostly uses CIME's public API (create_newcase, xmlchange), a component upgrade (Option B) is safer. If it patches internal CIME files, it's riskier.</li>
-  <li><strong>Is there appetite for a CESM 3.x migration?</strong> If the project plans to upgrade eventually, doing it now (Option D) avoids a throwaway intermediate step. If 2.2.x is the target for the foreseeable future, a lighter option makes more sense.</li>
+  <li><strong>Which NEON sites does the project actively use?</strong> If it's 3-5 sites, Option C is attractive. If many sites or all 81, Options A, B, or E scale better.</li>
+  <li><strong>How tightly coupled is <code>run_neon_v2.py</code> to CESM 2.2.x internals?</strong> If it mostly uses CIME's public API (create_newcase, xmlchange), Options B or E are safer. If it patches internal CIME files, it's riskier.</li>
+  <li><strong>Is there appetite for a CESM 3.x migration?</strong> If the project plans to upgrade eventually, Option D avoids a throwaway step. Otherwise, a lighter option makes more sense.</li>
+  <li><strong>Does the project ever need fully coupled simulations?</strong> If the answer is "no, we only run CLM against observed forcing data," then Option E (CTSM standalone) is arguably the most natural fit. If coupled experiments are on the roadmap, Options A-D preserve that capability.</li>
   <li><strong>Did the original ESCOMP container use a custom CTSM branch?</strong> Identifying exactly which CLM/CTSM the <code>escomp/cesm-lab-neon</code> image used would clarify the compatibility boundary.</li>
 </ol>
 
-<h2>Context</h2>
-<p>This issue was discovered during the multi-platform container rebuild (see <a href="../multiarch-rebuild-report.html">rebuild report</a>). The rebuild successfully modernized the base image, achieved native arm64 support with 89/89 tests passing, and resolved 13 compatibility issues between CESM 2.2.2 and modern toolchains. The NEON site issue is separate from the multi-arch work and predates it: it is a consequence of moving from the ESCOMP-customized container to a standard CESM 2.2.2 checkout.</p>
+<h2>CESM 3.x Release Timeline</h2>
+
+<p>For context on Option D: CESM 3.x was officially targeted for <strong>spring 2026</strong> (per the <a href="https://www.cesm.ucar.edu/news/community-earth-system-model-3-cesm3-plans-progress-timelines">CESM3 Plans page</a>, last updated November 2025). As of June 2026, that target has slipped. The latest beta tag on GitHub (<code>beta08</code>) was published April 2, 2026, following a steady progression from <code>beta03</code> (Oct 2024) through <code>beta08</code>. The February 2026 CESM newsletter referenced "finalization and release of CESM3 later this year." No revised release date has been published. The release is tied to CMIP7 forcing data availability, an external dependency.</p>
+
+<p>Best estimate: <strong>late 2026</strong>, but speculative. The project's NEON notebooks need to work now.</p>
+
+<h2>Recommendation</h2>
+
+<div class="callout" style="border-left-color: var(--uw-green); background: #f0f8f0;">
+  <div class="callout-title" style="color: var(--uw-green);">Option E (standalone CTSM) is recommended.</div>
+  <p>NCAR built the NEON workflow for standalone CTSM, not for CESM. Current CTSM releases have full NEON support available today. The multi-arch infrastructure, conda environment, and test framework from the rebuild carry over unchanged. The project runs land-only simulations with data atmosphere, which is exactly what standalone CTSM is designed for. The trade-off (losing coupled simulation capability) does not affect current workflows and can be revisited if scope expands.</p>
+  <p>See <a href="../../adr/0005-standalone-ctsm.md">ADR-0005</a> for the full decision record and implementation plan.</p>
+</div>
 
 </body>
 </html>
