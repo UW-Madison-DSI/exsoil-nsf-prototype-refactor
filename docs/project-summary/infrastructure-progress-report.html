@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Infrastructure Progress Report</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; line-height: 1.6; color: #282728; }
+h1 { font-size: 1.6rem; border-bottom: 3px solid #c5050c; padding-bottom: 0.4rem; }
+h2 { font-size: 1.3rem; color: #c5050c; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 0.2rem; }
+h3 { font-size: 1.1rem; margin-top: 1.5rem; }
+table { width: 100%%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; }
+th { background: #f7f7f7; }
+code { background: #f7f7f7; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.88em; }
+p { margin: 0.6rem 0; }
+ul, ol { margin: 0.5rem 0; padding-left: 1.5rem; }
+li { margin: 0.3rem 0; }
+@media print { table, h3 { break-inside: avoid; page-break-inside: avoid; } h2 { break-after: avoid; } }
+</style></head><body>
+<h1>Infrastructure Progress Report: ExSOIL Containerized Modeling Environment</h1>
+<p><strong>Period:</strong> May-June 2026
+<strong>Project:</strong> ExSOIL NSF Prototype
+<strong>Prepared by:</strong> Steven Wangen, UW-Madison Data Science Institute</p>
+<h2>Objectives</h2>
+<p>The ExSOIL project uses the Community Terrestrial Systems Model (CTSM)
+to simulate soil processes at NEON ecological observatory sites across
+the United States. Researchers run CTSM at specific tower locations,
+feed the model observed atmospheric forcing data, and compare the
+model's predictions of soil temperature, moisture, and carbon fluxes
+against real measurements from the tower instruments. This
+model-observation comparison is the foundation for evaluating and
+improving CTSM's representation of soil biogeochemistry.</p>
+<p>The project's computational environment is delivered as a Docker
+container that packages CTSM, the NEON site workflow, and a Python
+analysis stack into a single reproducible unit. Researchers pull the
+container, launch JupyterLab, and work with model simulations and
+observational data without installing or configuring any of the
+underlying software.</p>
+<p>This reporting period focused on two infrastructure objectives:</p>
+<ol>
+<li>
+<p><strong>Multi-platform support.</strong> The existing container only ran on
+   Intel/AMD processors. Team members on Apple Silicon Macs (M1-M4)
+   could not run the container reliably, limiting local development
+   and testing.</p>
+</li>
+<li>
+<p><strong>NEON workflow restoration.</strong> The container's NEON tower site
+   workflow had become non-functional due to version incompatibilities
+   in the underlying CESM/CTSM model framework.</p>
+</li>
+</ol>
+<h2>Activities and Outcomes</h2>
+<h3>Multi-architecture container rebuild</h3>
+<p>The project's Docker container was rebuilt from scratch on a modern
+foundation. The previous container was based on CentOS 8 (end-of-life
+since December 2021), shipped Python 3.7 (end-of-life since June 2023),
+and only produced Intel/AMD binaries.</p>
+<p>The rebuilt container:</p>
+<ul>
+<li>
+<p><strong>Runs natively on both Intel/AMD and Apple Silicon</strong> (arm64)
+  processors. Docker automatically selects the correct architecture
+  when pulling the image. Team members on Apple Silicon Macs can now
+  develop and test locally without the performance penalties and
+  stability issues of processor emulation.</p>
+</li>
+<li>
+<p><strong>Uses Ubuntu 24.04 LTS</strong> as the base operating system, with
+  security support through 2029. This replaces CentOS 8, which has
+  not received security patches since December 2021.</p>
+</li>
+<li>
+<p><strong>Installs all scientific libraries from conda-forge</strong> pre-built
+  binaries instead of compiling them from Fortran and C source code.
+  This reduced container build time from approximately 45 minutes to
+  5 minutes and eliminated a major source of architecture-specific
+  build failures.</p>
+</li>
+<li>
+<p><strong>Pins exact package versions</strong> via conda-lock for both processor
+  architectures, ensuring that every team member gets identical
+  software regardless of their hardware.</p>
+</li>
+<li>
+<p><strong>Upgrades to Python 3.13</strong> and current versions of all scientific
+  packages (xarray, cartopy, matplotlib, scipy, etc.), replacing
+  versions that were 4-6 years old.</p>
+</li>
+</ul>
+<p>A 90-test automated validation suite was developed to verify the
+container's functionality across three tiers: basic environment checks
+(Python imports, compilers, libraries), CIME case management workflow
+(creating and configuring CTSM cases), and full Fortran model
+compilation with scientific analysis workflows (NetCDF I/O, cartopy
+map rendering, xarray diagnostics). All 90 tests pass on native arm64.</p>
+<h3>CTSM migration and NEON workflow restoration</h3>
+<p>During the rebuild, we discovered that the NEON tower site workflow
+was non-functional. Investigation revealed that NEON support was never
+part of any CESM 2.x release; it was developed exclusively for
+standalone CTSM starting in February 2021 and will not enter CESM
+until version 3.x (currently in beta, targeted for late 2026). The
+previous container had worked around this by using a custom,
+undocumented build that mixed component versions from different release
+lines.</p>
+<p>Based on this finding, we replaced the full CESM framework with
+standalone CTSM 5.4, which is NCAR's intended platform for the NEON
+workflow. This change:</p>
+<ul>
+<li>
+<p><strong>Restored the NEON tower site workflow</strong> with pre-configured
+  settings for 48 NEON sites. Researchers can create and run
+  single-point CLM simulations at any of these sites.</p>
+</li>
+<li>
+<p><strong>Reduced the container image size</strong> by removing approximately 3-4 GB
+  of source code for Earth system components the project does not use
+  (atmosphere, ocean, sea ice, ice sheet, and wave models).</p>
+</li>
+<li>
+<p><strong>Aligned with NCAR's recommended approach</strong> for NEON tower
+  experiments, as documented in the official CTSM user guide and NCAR
+  tutorial materials.</p>
+</li>
+<li>
+<p><strong>Removed the need for several workarounds</strong> that had been applied to
+  make CESM 2.2.2 compile with modern compilers, including PIO2 source
+  patches, Python version pinning, and cmake version restrictions.</p>
+</li>
+</ul>
+<p>The trade-off is that the container no longer supports fully coupled
+Earth system simulations (where the land surface interacts with a
+simulated atmosphere, ocean, and ice). The project does not currently
+use coupled simulations; all existing workflows run CLM in single-point
+mode with observed atmospheric forcing. If coupled experiments are
+needed in the future, a separate CESM 3.x container can be maintained
+alongside the CTSM container.</p>
+<h3>Documentation</h3>
+<p>The rebuild and migration are documented through:</p>
+<ul>
+<li><strong>5 Architecture Decision Records</strong> that capture the rationale for
+  each major technical choice (base image selection, build strategy,
+  dependency management, distributed computing support, and the CTSM
+  migration)</li>
+<li><strong>A decision brief</strong> analyzing five options for restoring NEON
+  support, including a version lineage diagram and CESM 3.x timeline
+  research</li>
+<li><strong>A technical rebuild report</strong> covering the full implementation
+  detail for platform engineering review</li>
+<li><strong>A getting-started guide and introductory notebook</strong> for new users
+  joining the project</li>
+<li><strong>A roadmap</strong> tracking completed work and planned next steps</li>
+<li><strong>A changelog</strong> summarizing all additions, changes, and removals</li>
+</ul>
+<h2>Challenges</h2>
+<p>The primary challenge was the gap between CESM's official release
+versions and the NEON workflow's development timeline. The NEON tower
+site functionality was developed on CTSM's master branch after the
+CESM 2.2 release line had been cut, and will not be available in a
+full CESM release until version 3.x ships. The previous container
+masked this gap by using an undocumented custom build. Our rebuild
+exposed the issue, which led to the architectural decision to move
+to standalone CTSM.</p>
+<p>A secondary challenge was achieving Fortran compilation on arm64 with
+modern compiler and library versions. CESM 2.2.2's code (written
+primarily for Intel compilers on x86 HPC systems) required 13 separate
+compatibility fixes to compile with GCC 15 and conda-forge's current
+NetCDF libraries on ARM processors. These fixes were identified
+iteratively through the automated test suite. Many of them became
+unnecessary after the CTSM migration, which uses newer, more
+portable code.</p>
+<h2>Next Steps</h2>
+<ol>
+<li>
+<p><strong>NEON simulation pipeline.</strong> The Modeling_Hub notebook, which
+   performs model-data evaluation and Kalman Filter calibration,
+   requires CLM history files from a completed transient run and
+   processed NEON tower observations. Building this end-to-end
+   pipeline (data download, simulation execution, observation
+   processing) is the next priority.</p>
+</li>
+<li>
+<p><strong>CI/CD test integration.</strong> The 90-test validation suite runs
+   locally but is not yet wired into the GitHub Actions workflow.
+   Adding automated testing on both architectures after each push
+   will catch regressions early.</p>
+</li>
+<li>
+<p><strong>Cross-architecture validation.</strong> All local testing was performed
+   on Apple Silicon (arm64). The Intel/AMD (amd64) image builds in CI
+   but has not been validated through the test suite.</p>
+</li>
+<li>
+<p><strong>Science notebook validation.</strong> The Data_Hub and Design_Hub
+   notebooks need end-to-end testing with S3 credentials on the new
+   CTSM container to verify the full analysis workflow.</p>
+</li>
+</ol></body></html>
