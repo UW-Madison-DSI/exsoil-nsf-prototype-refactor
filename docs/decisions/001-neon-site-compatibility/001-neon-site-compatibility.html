@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Decision Brief: NEON Site Compatibility</title>
+<style>
+  :root {
+    --uw-red: #c5050c;
+    --uw-dark: #282728;
+    --uw-gray: #646569;
+    --uw-light: #f7f7f7;
+    --uw-blue: #0479a8;
+    --uw-green: #3d7a38;
+    --uw-orange: #d48a00;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--uw-dark);
+    line-height: 1.65;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+    background: #fff;
+  }
+  h1 {
+    font-size: 1.8rem;
+    border-bottom: 3px solid var(--uw-red);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .subtitle {
+    color: var(--uw-gray);
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+  }
+  h2 {
+    font-size: 1.4rem;
+    color: var(--uw-red);
+    margin: 2rem 0 0.75rem;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 0.3rem;
+  }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  p { margin: 0.6rem 0; }
+  code {
+    background: var(--uw-light);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.88em;
+    font-family: "SF Mono", "Fira Code", Menlo, monospace;
+  }
+  pre {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin: 1rem 0;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  th, td {
+    border: 1px solid #ddd;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--uw-light); font-weight: 600; }
+  .status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--uw-orange);
+    margin-bottom: 1rem;
+  }
+  .callout {
+    border-left: 4px solid var(--uw-red);
+    background: #fdf2f2;
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .callout-title {
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+    color: var(--uw-red);
+  }
+  .option-card {
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    margin: 1.25rem 0;
+    overflow: hidden;
+  }
+  .option-header {
+    background: var(--uw-light);
+    padding: 0.6rem 1rem;
+    font-weight: 700;
+    font-size: 1rem;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .option-body { padding: 1rem; }
+  .option-body ul {
+    margin: 0.4rem 0;
+    padding-left: 1.25rem;
+  }
+  .option-body li { margin: 0.25rem 0; font-size: 0.9rem; }
+  .tag {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .tag-effort-low { background: #d4edda; color: #155724; }
+  .tag-effort-med { background: #fff3cd; color: #856404; }
+  .tag-effort-high { background: #f8d7da; color: #721c24; }
+  .tag-risk-low { border: 1px solid #28a745; color: #28a745; }
+  .tag-risk-med { border: 1px solid var(--uw-orange); color: var(--uw-orange); }
+  .tag-risk-high { border: 1px solid var(--uw-red); color: var(--uw-red); }
+
+  .question-list { margin: 1rem 0; padding: 0; list-style: none; counter-reset: q; }
+  .question-list li {
+    counter-increment: q;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #eee;
+    font-size: 0.95rem;
+  }
+  .question-list li:last-child { border-bottom: none; }
+  .question-list li::before {
+    content: "Q" counter(q);
+    display: inline-block;
+    background: var(--uw-blue);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+  }
+
+  /* Comparison matrix */
+  .matrix td:nth-child(1) { font-weight: 600; white-space: nowrap; }
+  .check { color: var(--uw-green); font-weight: 700; }
+  .cross { color: var(--uw-red); font-weight: 700; }
+  .maybe { color: var(--uw-orange); font-weight: 700; }
+
+  @media print {
+    .option-card, table, pre, .callout { break-inside: avoid; page-break-inside: avoid; }
+    h2, h3 { break-after: avoid; page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Decision Brief: NEON Site Compatibility</h1>
+<div class="subtitle">ExSOIL NSF Prototype &middot; June 2026 &middot; Steven Wangen</div>
+<div class="status-badge">Open for Discussion</div>
+
+<h2>Problem</h2>
+
+<div class="callout">
+  <div class="callout-title">The NEON site workflow is non-functional in the rebuilt container.</div>
+  <p>CESM 2.2.2's CLM component predates the NEON tower site workflow. The per-site configuration directories ("usermods") that <code>run_neon_v2.py</code> depends on do not exist in this CLM release. Running any NEON site command fails immediately:</p>
+</div>
+
+<pre><code>$ run_neon_v2 --neon-sites ABBY --output-root ~/output --overwrite
+
+run_neon_v2: error: argument --neon-sites: invalid choice: 'ABBY' (choose from 'all')</code></pre>
+
+<h3>Why this happens</h3>
+<p>The script discovers available sites by scanning a directory in the CLM source tree:</p>
+<pre><code>valid_neon_sites = sorted([
+    v.split("/")[-1]
+    for v in glob.glob(
+        os.path.join(cesmroot, "cime_config", "usermods_dirs", "NEON", "[!d]*")
+    )
+])</code></pre>
+
+<p>In the original <code>escomp/cesm-lab-neon</code> container (built ~2022), this directory contained 81 NEON site folders (ABBY, BART, KONZ, etc.). In CESM 2.2.2's standard CLM checkout, <strong>this directory does not exist</strong>. The NEON usermods were added to CTSM after the 2.2.x release series.</p>
+
+<h3>What still works</h3>
+<table>
+  <tr><th>Capability</th><th>Status</th><th>Notes</th></tr>
+  <tr><td>General CESM case creation</td><td><span class="check">Working</span></td><td>I2000Clm50Sp, B1850, etc. all verified</td></tr>
+  <tr><td>CESM Fortran compilation</td><td><span class="check">Working</span></td><td>case.build produces cesm.exe in 78s on arm64</td></tr>
+  <tr><td>Python scientific stack</td><td><span class="check">Working</span></td><td>All 28 tutorial packages, 63 smoke tests pass</td></tr>
+  <tr><td>JupyterLab</td><td><span class="check">Working</span></td><td>Starts, serves notebooks, Panel extensions loaded</td></tr>
+  <tr><td>NEON site runs (run_neon_v2)</td><td><span class="cross">Broken</span></td><td>No valid site codes; usermods directory missing</td></tr>
+  <tr><td>Design_Hub / Modeling_Hub notebooks</td><td><span class="cross">Broken</span></td><td>Depend on NEON site runs</td></tr>
+</table>
+
+<h2>Options</h2>
+
+<div class="option-card">
+  <div class="option-header">
+    <span>Option A: Graft NEON usermods from newer CTSM</span>
+    <span><span class="tag tag-effort-low">Low effort</span> <span class="tag tag-risk-med">Moderate risk</span></span>
+  </div>
+  <div class="option-body">
+    <p>Copy the <code>usermods_dirs/NEON/</code> directory from a recent CTSM release (e.g., ctsm5.2) into the CESM 2.2.2 CLM tree during the Docker build. This is likely how the original ESCOMP image was assembled.</p>
+    <p><strong>Pros:</strong></p>
+    <ul>
+      <li>Minimal disruption to the rest of the CESM source tree</li>
+      <li>NEON usermods are mostly configuration files (XML, shell scripts), not compiled code</li>
+      <li>A few <code>COPY</code> lines in the Dockerfile</li>
+    </ul>
+    <p><strong>Cons:</strong></p>
+    <ul>
+      <li>Usermods may reference namelist options or surface datasets that don't exist in CESM 2.2.2's CLM</li>
+      <li>Compatibility not guaranteed; could cause subtle configuration errors</li>
+      <li>Creates ongoing maintenance burden tracking which CTSM version usermods came from</li>
+    </ul>
+    <p><strong>Timeline:</strong> Hours to implement, days to validate.</p>
+  </div>
+</div>
+
+<div class="option-card">
+  <div class="option-header">
+    <span>Option B: Pin CLM component to newer CTSM tag</span>
+    <span><span class="tag tag-effort-med">Medium effort</span> <span class="tag tag-risk-med">Moderate risk</span></span>
+  </div>
+  <div class="option-body">
+    <p>Override just the CLM/CTSM component in the CESM checkout to use a newer tag (e.g., <code>ctsm5.2.005</code>) while keeping the rest of CESM at 2.2.2. CESM's <code>Externals.cfg</code> supports per-component tag overrides.</p>
+    <p><strong>Pros:</strong></p>
+    <ul>
+      <li>Gets the full NEON workflow as designed: usermods, surface datasets, code fixes</li>
+      <li>Officially supported CLM version with community testing</li>
+      <li>Forward-compatible with future NEON site additions</li>
+    </ul>
+    <p><strong>Cons:</strong></p>
+    <ul>
+      <li>Newer CTSM may have API incompatibilities with CESM 2.2.2's CIME or coupler</li>
+      <li>Could break the case.build compilation (89/89 tests currently pass)</li>
+      <li>Mixing component versions is officially unsupported by ESCOMP</li>
+    </ul>
+    <p><strong>Timeline:</strong> Days. Requires rebuild, recompile, full re-test.</p>
+  </div>
+</div>
+
+<div class="option-card">
+  <div class="option-header">
+    <span>Option C: Bundle NEON configs in this repository</span>
+    <span><span class="tag tag-effort-med">Medium-high effort</span> <span class="tag tag-risk-low">Low risk</span></span>
+  </div>
+  <div class="option-body">
+    <p>Create a <code>neon-sites/</code> directory in this repository with per-site usermods (shell_commands, user_nl_clm, etc.) and copy them into the CLM tree during the Docker build. Maintain independently of any CTSM release.</p>
+    <p><strong>Pros:</strong></p>
+    <ul>
+      <li>Full control over site configurations; no external version dependency</li>
+      <li>Can limit to the specific sites the project uses (not all 81)</li>
+      <li>Easy to add custom sites or project-specific modifications</li>
+    </ul>
+    <p><strong>Cons:</strong></p>
+    <ul>
+      <li>Significant upfront effort to create or port usermods for each site</li>
+      <li>Must manually maintain surface dataset references and domain file paths</li>
+      <li>Diverges from the community CTSM NEON workflow</li>
+    </ul>
+    <p><strong>Timeline:</strong> Days to a week, depending on number of sites needed.</p>
+  </div>
+</div>
+
+<div class="option-card">
+  <div class="option-header">
+    <span>Option D: Upgrade to CESM 3.x / CTSM 6.x</span>
+    <span><span class="tag tag-effort-high">High effort</span> <span class="tag tag-risk-high">High risk</span></span>
+  </div>
+  <div class="option-body">
+    <p>Move to a current CESM release that natively includes the NEON workflow. Resolves this issue at its root and also fixes the Python 3.11 pin, the PIO2 filter patches, and other 2.2.x limitations.</p>
+    <p><strong>Pros:</strong></p>
+    <ul>
+      <li>Resolves NEON, Python version, PIO2, and other 2.2.x issues in one move</li>
+      <li>Aligns with the community's current supported version</li>
+      <li>Future-proofs the container for years</li>
+    </ul>
+    <p><strong>Cons:</strong></p>
+    <ul>
+      <li>Major version upgrade with potentially breaking changes across all components</li>
+      <li><code>run_neon_v2.py</code> was written against 2.2.x APIs; likely needs significant rewrite</li>
+      <li>All 89 container tests need re-validation</li>
+      <li>Machine configurations and compiler flags may need rework</li>
+    </ul>
+    <p><strong>Timeline:</strong> Weeks. Essentially a second rebuild effort.</p>
+  </div>
+</div>
+
+<h2>Comparison</h2>
+
+<table class="matrix">
+  <tr>
+    <th></th>
+    <th>A: Graft usermods</th>
+    <th>B: Newer CLM tag</th>
+    <th>C: Bundle in repo</th>
+    <th>D: CESM 3.x</th>
+  </tr>
+  <tr>
+    <td>Effort</td>
+    <td><span class="check">Low</span></td>
+    <td><span class="maybe">Medium</span></td>
+    <td><span class="maybe">Medium-high</span></td>
+    <td><span class="cross">High</span></td>
+  </tr>
+  <tr>
+    <td>NEON sites work</td>
+    <td><span class="maybe">Likely</span></td>
+    <td><span class="check">Yes</span></td>
+    <td><span class="check">Yes</span></td>
+    <td><span class="check">Yes</span></td>
+  </tr>
+  <tr>
+    <td>Existing tests pass</td>
+    <td><span class="check">Yes</span></td>
+    <td><span class="maybe">Unknown</span></td>
+    <td><span class="check">Yes</span></td>
+    <td><span class="cross">Must re-validate</span></td>
+  </tr>
+  <tr>
+    <td>Fixes Python 3.11 pin</td>
+    <td><span class="cross">No</span></td>
+    <td><span class="cross">No</span></td>
+    <td><span class="cross">No</span></td>
+    <td><span class="check">Yes</span></td>
+  </tr>
+  <tr>
+    <td>Fixes PIO2 patches</td>
+    <td><span class="cross">No</span></td>
+    <td><span class="cross">No</span></td>
+    <td><span class="cross">No</span></td>
+    <td><span class="check">Yes</span></td>
+  </tr>
+  <tr>
+    <td>Community-maintained</td>
+    <td><span class="maybe">Partial</span></td>
+    <td><span class="check">Yes</span></td>
+    <td><span class="cross">No</span></td>
+    <td><span class="check">Yes</span></td>
+  </tr>
+  <tr>
+    <td>Risk to current build</td>
+    <td><span class="check">Low</span></td>
+    <td><span class="maybe">Moderate</span></td>
+    <td><span class="check">Low</span></td>
+    <td><span class="cross">High</span></td>
+  </tr>
+</table>
+
+<h2>Questions for Discussion</h2>
+
+<ol class="question-list">
+  <li><strong>Which NEON sites does the project actively use?</strong> If it's 3-5 sites, Option C is attractive. If many sites or all 81, Options A or B scale better.</li>
+  <li><strong>How tightly coupled is <code>run_neon_v2.py</code> to CESM 2.2.x internals?</strong> If it mostly uses CIME's public API (create_newcase, xmlchange), a component upgrade (Option B) is safer. If it patches internal CIME files, it's riskier.</li>
+  <li><strong>Is there appetite for a CESM 3.x migration?</strong> If the project plans to upgrade eventually, doing it now (Option D) avoids a throwaway intermediate step. If 2.2.x is the target for the foreseeable future, a lighter option makes more sense.</li>
+  <li><strong>Did the original ESCOMP container use a custom CTSM branch?</strong> Identifying exactly which CLM/CTSM the <code>escomp/cesm-lab-neon</code> image used would clarify the compatibility boundary.</li>
+</ol>
+
+<h2>Context</h2>
+<p>This issue was discovered during the multi-platform container rebuild (see <a href="../multiarch-rebuild-report.html">rebuild report</a>). The rebuild successfully modernized the base image, achieved native arm64 support with 89/89 tests passing, and resolved 13 compatibility issues between CESM 2.2.2 and modern toolchains. The NEON site issue is separate from the multi-arch work and predates it: it is a consequence of moving from the ESCOMP-customized container to a standard CESM 2.2.2 checkout.</p>
+
+</body>
+</html>
