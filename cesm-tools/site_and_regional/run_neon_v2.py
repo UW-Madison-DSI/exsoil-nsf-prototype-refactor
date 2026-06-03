@@ -827,7 +827,7 @@ class NeonSite:
         print("---- building base case ----")
         self.base_case_root = output_root
         user_mods_dirs = [
-            os.path.join(cesmroot, "cime_config", "usermods_dirs", "NEON", self.name)
+            os.path.join(cesmroot, "cime_config", "usermods_dirs", "clm", "NEON", self.name)
         ]
         if not output_root:
             output_root = os.getcwd()
@@ -924,7 +924,7 @@ class NeonSite:
         """
         user_mods_dirs = [
             os.path.join(
-                self.cesmroot, "cime_config", "usermods_dirs", "NEON", self.name
+                self.cesmroot, "cime_config", "usermods_dirs", "clm", "NEON", self.name
             )
         ]
         expect(
@@ -1219,7 +1219,7 @@ def main(description):
     valid_neon_sites = sorted([
         v.split("/")[-1]
         for v in glob.glob(
-            os.path.join(cesmroot, "cime_config", "usermods_dirs", "NEON", "[!d]*")
+            os.path.join(cesmroot, "cime_config", "usermods_dirs", "clm", "NEON", "[!d]*")
         )
     ])
 
@@ -1238,7 +1238,7 @@ def main(description):
     available_list = check_neon_listing(valid_neon_sites)
 
     res = "CLM_USRDAT"
-    compset = "IHist1PtClm51Bgc" if run_type == "transient" else "I1PtClm51Bgc"
+    compset = "IHist1PtClm60Bgc" if run_type == "transient" else "I1PtClm60Bgc"
 
     for neon_site in available_list:
         if neon_site.name not in site_list:

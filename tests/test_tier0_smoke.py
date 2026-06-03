@@ -136,7 +136,7 @@ class TestPythonImports:
 
 # ── CESM/CTSM Python modules ────────────────────────────────────────────
 
-class TestCESMPythonModules:
+class TestCTSMPythonModules:
     """CESM and CTSM Python packages must be importable."""
 
     def test_ctsm_import(self):
@@ -259,10 +259,10 @@ class TestNetCDFLibraries:
         assert os.path.exists(lib), f"{lib} not found"
 
 
-# ── CESM directory structure ─────────────────────────────────────────────
+# ── CTSM directory structure ──────────────────────────────────────────────
 
-class TestCESMInstall:
-    """CESM source tree and scripts must be in the expected locations."""
+class TestCTSMInstall:
+    """CTSM source tree and scripts must be in the expected locations."""
 
     def test_cesmroot_set(self):
         assert os.environ.get("CESMROOT"), "CESMROOT not set"
@@ -273,29 +273,37 @@ class TestCESMInstall:
     def test_cesmdataroot_set(self):
         assert os.environ.get("CESMDATAROOT"), "CESMDATAROOT not set"
 
-    def test_create_newcase_exists(self, cesm_root):
-        script = os.path.join(cesm_root, "cime", "scripts", "create_newcase")
+    def test_create_newcase_exists(self, ctsm_root):
+        script = os.path.join(ctsm_root, "cime", "scripts", "create_newcase")
         assert os.path.exists(script)
 
-    def test_query_config_exists(self, cesm_root):
-        script = os.path.join(cesm_root, "cime", "scripts", "query_config")
+    def test_query_config_exists(self, ctsm_root):
+        script = os.path.join(ctsm_root, "cime", "scripts", "query_config")
         assert os.path.exists(script)
 
-    def test_config_machines_xml(self, cesm_root):
+    def test_config_machines_xml(self, ctsm_root):
         path = os.path.join(
-            cesm_root, "cime", "config", "cesm", "machines", "config_machines.xml",
+            ctsm_root, "ccs_config", "machines", "container", "config_machines.xml",
         )
         assert os.path.exists(path)
         content = open(path).read()
         assert "container" in content
 
-    def test_config_compilers_xml(self, cesm_root):
+    def test_container_cmake(self, ctsm_root):
         path = os.path.join(
-            cesm_root, "cime", "config", "cesm", "machines", "config_compilers.xml",
+            ctsm_root, "ccs_config", "machines", "container", "container.cmake",
         )
         assert os.path.exists(path)
         content = open(path).read()
         assert "CONDA_PREFIX" in content
+
+    def test_neon_usermods_exist(self, ctsm_root):
+        """NEON site directories must be present (the reason we switched to CTSM)."""
+        import glob
+        sites = glob.glob(os.path.join(
+            ctsm_root, "cime_config", "usermods_dirs", "clm", "NEON", "[!d]*",
+        ))
+        assert len(sites) >= 40, f"Expected 40+ NEON sites, found {len(sites)}"
 
 
 # ── Environment and paths ────────────────────────────────────────────────
@@ -329,7 +337,7 @@ class TestEnvironment:
 # ── Dateutil / six regression ────────────────────────────────────────────
 
 class TestDateutilRegression:
-    """Bundled six.py in CESM tree must not shadow conda-forge six."""
+    """Verify dateutil and six work correctly."""
 
     def test_dateutil_tz_imports(self):
         from dateutil.tz import tz

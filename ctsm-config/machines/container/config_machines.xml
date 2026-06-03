@@ -1,21 +1,20 @@
 <?xml version="1.0"?>
 
 <!--
-  Container machine definition for CESM, adapted from ESCOMP/ESCOMP-Containers.
-  Paths updated to reference conda-forge libraries at $CONDA_PREFIX instead of
-  hand-compiled libraries at /usr/local.
+  Container machine definition for CTSM standalone, adapted for conda-forge.
+  Overlays ccs_config's default container definition to use conda-forge
+  library paths at $CONDA_PREFIX instead of hand-compiled paths at /usr/local.
 -->
 
 <config_machines version="2.0">
   <machine MACH="container">
     <DESC>
-      Containerized development environment (Docker/Singularity) for CESM.
-      Libraries provided by conda-forge (MPICH, HDF5, NetCDF, PNetCDF).
+      Containerized CTSM environment (Docker) with conda-forge libraries.
     </DESC>
     <OS>LINUX</OS>
     <COMPILERS>gnu</COMPILERS>
     <MPILIBS>mpich</MPILIBS>
-    <CIME_OUTPUT_ROOT>$CASEROOT/</CIME_OUTPUT_ROOT>
+    <CIME_OUTPUT_ROOT>$ENV{HOME}/scratch</CIME_OUTPUT_ROOT>
     <DIN_LOC_ROOT>$ENV{CESMDATAROOT}/inputdata</DIN_LOC_ROOT>
     <DIN_LOC_ROOT_CLMFORC>$DIN_LOC_ROOT/atm/datm7</DIN_LOC_ROOT_CLMFORC>
     <DOUT_S_ROOT>$ENV{HOME}/archive/$CASE</DOUT_S_ROOT>
@@ -34,21 +33,18 @@
     </mpirun>
     <module_system type="none">
     </module_system>
-    <RUNDIR>$CIME_OUTPUT_ROOT/run</RUNDIR>
-    <EXEROOT>$CIME_OUTPUT_ROOT/bld</EXEROOT>
+    <RUNDIR>$CIME_OUTPUT_ROOT/$CASE/run</RUNDIR>
+    <EXEROOT>$CIME_OUTPUT_ROOT/$CASE/bld</EXEROOT>
     <environment_variables>
       <env name="NETCDF_PATH">$ENV{CONDA_PREFIX}</env>
       <env name="PNETCDF_PATH">$ENV{CONDA_PREFIX}</env>
       <env name="FPATH">$ENV{CONDA_PREFIX}/lib</env>
       <env name="CPATH">$ENV{CONDA_PREFIX}/include</env>
+      <env name="ESMFMKFILE">$ENV{CONDA_PREFIX}/lib/esmf.mk</env>
     </environment_variables>
     <resource_limits>
       <resource name="RLIMIT_STACK">-1</resource>
     </resource_limits>
   </machine>
 
-  <default_run_suffix>
-    <default_run_exe>${EXEROOT}/cesm.exe </default_run_exe>
-    <default_run_misc_suffix> >> cesm.log.$LID 2>&amp;1 </default_run_misc_suffix>
-  </default_run_suffix>
 </config_machines>

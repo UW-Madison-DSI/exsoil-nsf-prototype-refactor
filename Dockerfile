@@ -31,18 +31,9 @@ ENV PATH="${CONDA_DIR}/bin:${PATH}" \
     CONDA_PREFIX="${CONDA_DIR}"
 
 # Install the scientific Python + compiled library stack from conda-forge.
-# MPICH, HDF5, NetCDF, PNetCDF all come from conda-forge binaries (no source
-# compilation needed). See docs/adr/0003-conda-environment-strategy.md and
-# docs/adr/0004-distributed-computing-support.md.
-#
 # conda-lock.yml pins exact versions for both linux-64 and linux-aarch64.
 # To update: edit environment.yml, then run:
 #   conda-lock lock -f environment.yml -p linux-64 -p linux-aarch64 --mamba
-# conda-lock.yml is the source of truth (pinned versions for both linux-64
-# and linux-aarch64). We render the platform-appropriate explicit lockfile
-# at build time and install from it. The pip dependencies declared in
-# conda-lock.yml are installed separately since explicit lockfiles don't
-# support them natively.
 COPY conda-lock.yml /tmp/conda-lock.yml
 COPY conda-linux-aarch64.lock conda-linux-64.lock /tmp/
 RUN ARCH=$(uname -m) \
@@ -65,9 +56,7 @@ RUN if [ "$INSTALL_DASK_DISTRIBUTED" = "true" ]; then \
     fi \
     && rm /tmp/environment-dask.yml
 
-# pip-only dependencies that are already declared in environment.yml's pip
-# section are installed above. requirements.txt is kept for any additional
-# runtime-only packages (e.g., jupyterhub for DockerSpawner compatibility).
+# pip-only dependencies from requirements.txt (if any)
 COPY requirements.txt /tmp/requirements.txt
 RUN if [ -s /tmp/requirements.txt ] && grep -qvE '^\s*(#|$)' /tmp/requirements.txt; then \
         pip install --no-cache-dir -r /tmp/requirements.txt; \
@@ -79,94 +68,72 @@ ENV PROJ_DATA="${CONDA_DIR}/share/proj"
 
 
 # =============================================================================
-# Stage 2: CESM source + machine configuration
+# Stage 2: CTSM source + machine configuration
+# Standalone CTSM with NEON tower workflow (ADR-0005)
 # =============================================================================
-FROM base AS cesm
+FROM base AS ctsm
 
-ARG CESM_TAG=release-cesm2.2.2
-ARG CESM_ROOT=/opt/ncar/cesm
+ARG CTSM_TAG=ctsm5.4.002
+ARG CTSM_ROOT=/opt/ncar/ctsm
 
-# Create user and group matching the upstream image convention
-RUN groupadd -r cesm \
-    && useradd -r -m -g cesm -G sudo -s /bin/bash user \
+# Create user and group
+RUN groupadd -r ctsm \
+    && useradd -r -m -g ctsm -G sudo -s /bin/bash user \
     && echo "user ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-RUN git clone --branch ${CESM_TAG} --depth 1 \
-        https://github.com/ESCOMP/cesm.git ${CESM_ROOT} \
-    && cd ${CESM_ROOT} \
-    && ./manage_externals/checkout_externals \
-    && for f in ${CESM_ROOT}/cime/src/externals/pio2/src/flib/pio_nf.F90 \
-                ${CESM_ROOT}/cime/src/externals/pio2/src/flib/pio.F90; do \
-         sed -i 's/PIO_HAS_PAR_FILTERS/DISABLED_PIO_HAS_PAR_FILTERS/g' "$f"; \
-         sed -i 's/NC_HAS_MULTIFILTERS/DISABLED_NC_HAS_MULTIFILTERS/g' "$f"; \
-         sed -i 's/NC_HAS_QUANTIZE/DISABLED_NC_HAS_QUANTIZE/g' "$f"; \
-         sed -i 's/NC_HAS_ZSTD/DISABLED_NC_HAS_ZSTD/g' "$f"; \
-         sed -i 's/NC_HAS_BZ/DISABLED_NC_HAS_BZ/g' "$f"; \
-       done
+RUN git clone --branch ${CTSM_TAG} \
+        https://github.com/ESCOMP/CTSM.git ${CTSM_ROOT} \
+    && cd ${CTSM_ROOT} \
+    && ./bin/git-fleximod update \
+    || (cd ${CTSM_ROOT} && git submodule update --init --recursive && ./bin/git-fleximod update)
 
-# Install container machine configs (conda-forge paths, not /usr/local).
-# See cesm-config/machines/ for the adapted XML files.
-COPY cesm-config/machines/config_machines.xml \
-     ${CESM_ROOT}/cime/config/cesm/machines/config_machines.xml
-COPY cesm-config/machines/config_compilers.xml \
-     ${CESM_ROOT}/cime/config/cesm/machines/config_compilers.xml
-COPY cesm-config/machines/config_inputdata.xml \
-     ${CESM_ROOT}/cime/config/cesm/config_inputdata.xml
-
-# PE layout configs (all components use all available cores, single-threaded)
-COPY cesm-config/cime_config/config_pes.xml \
-     ${CESM_ROOT}/cime_config/config_pes.xml
-COPY cesm-config/component_pes/cam/config_pes.xml \
-     ${CESM_ROOT}/components/cam/cime_config/config_pes.xml
-COPY cesm-config/component_pes/cice/config_pes.xml \
-     ${CESM_ROOT}/components/cice/cime_config/config_pes.xml
-COPY cesm-config/component_pes/cism/config_pes.xml \
-     ${CESM_ROOT}/components/cism/cime_config/config_pes.xml
-COPY cesm-config/component_pes/pop/config_pes.xml \
-     ${CESM_ROOT}/components/pop/cime_config/config_pes.xml
-COPY cesm-config/component_pes/clm/config_pes.xml \
-     ${CESM_ROOT}/components/clm/cime_config/config_pes.xml
+# Overlay container machine configs with conda-forge paths.
+# ccs_config ships a container definition pointing at /usr/local;
+# we override with $CONDA_PREFIX paths and arm64-safe GPTL flags.
+COPY ctsm-config/machines/container/config_machines.xml \
+     ${CTSM_ROOT}/ccs_config/machines/container/config_machines.xml
+COPY ctsm-config/machines/container/container.cmake \
+     ${CTSM_ROOT}/ccs_config/machines/container/container.cmake
 
 ENV CESMDATAROOT=/home/user \
     CIME_MACHINE=container \
-    CESMROOT=${CESM_ROOT}
+    CESMROOT=${CTSM_ROOT}
 
-# Add CESM scripts to PATH
-ENV PATH="${CESM_ROOT}/cime/scripts:${PATH}"
+# Add CIME scripts to PATH
+ENV PATH="${CTSM_ROOT}/cime/scripts:${PATH}"
 
-# Ensure all CESM files are owned by the user
-RUN chown -R user:cesm ${CESM_ROOT}
+# Ensure all CTSM files are owned by the user
+RUN chown -R user:ctsm ${CTSM_ROOT}
 
 
 # =============================================================================
 # Stage 3: Project application layer
 # This is the only stage that rebuilds on day-to-day code changes.
 # =============================================================================
-FROM cesm AS app
+FROM ctsm AS app
 
 # Install reusable Python modules so they can be imported from any notebook
-COPY --chown=user:cesm analytics_modules/ /opt/analytics_modules/
-# CLM bundles an old six.py that shadows the real package and breaks dateutil.
-# Remove it so the conda-forge six is found instead.
-RUN find ${CESMROOT} -name "six.py" -not -path "*/site-packages/*" -delete \
- && find ${CESMROOT} -name "six_additions.py" -delete
+COPY --chown=user:ctsm analytics_modules/ /opt/analytics_modules/
 
-ENV PYTHONPATH="/opt:/opt/analytics_modules:${CESMROOT}/components/clm/python:${CESMROOT}/cime/scripts/lib:${CESMROOT}/cime/scripts/Tools"
+# CTSM Python modules are at the repo root (python/ctsm/), not under components/
+ENV PYTHONPATH="/opt:/opt/analytics_modules:${CESMROOT}/python:${CESMROOT}/cime/scripts/lib:${CESMROOT}/cime/scripts/Tools"
 
-# Drop extended NEON wrapper next to the upstream run_neon.py
-COPY --chown=user:cesm --chmod=0755 \
+# Drop extended NEON wrapper into CTSM tools directory
+COPY --chown=user:ctsm --chmod=0755 \
      cesm-tools/site_and_regional/run_neon_v2.py \
      ${CESMROOT}/tools/site_and_regional/run_neon_v2.py
 
-# Expose NEON runners as PATH-resolvable commands
-RUN ln -sf ${CESMROOT}/tools/site_and_regional/run_neon.py     /usr/local/bin/run_neon \
+# Expose runners as PATH-resolvable commands
+RUN ln -sf ${CESMROOT}/tools/site_and_regional/run_tower  /usr/local/bin/run_tower \
  && ln -sf ${CESMROOT}/tools/site_and_regional/run_neon_v2.py  /usr/local/bin/run_neon_v2
 
 # Drop in notebooks and analysis code
-COPY --chown=user:cesm notebooks/ /home/user/notebooks/
+COPY --chown=user:ctsm notebooks/ /home/user/notebooks/
 
 USER user
 ENV USER=user
+RUN git config --global user.email "user@container" \
+ && git config --global user.name "Container User"
 WORKDIR /home/user
 
 EXPOSE 8888

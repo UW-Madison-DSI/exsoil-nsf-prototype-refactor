@@ -31,19 +31,19 @@ def run(cmd: list[str], timeout: int = 600, **kwargs) -> subprocess.CompletedPro
 
 class TestCaseBuild:
     """
-    Build a land-only CLM case (I2000Clm50Sp at f19_g17).
+    Build a land-only CLM case (I2000Clm60Sp at f19_g17).
     This is the lightest full CESM build and validates that the
     Fortran compiler, MPI, NetCDF, and CESM build system all
     work together on this architecture.
     """
 
-    COMPSET = "I2000Clm50Sp"
+    COMPSET = "I2000Clm60Sp"
     RES = "f19_g17"
 
     @pytest.fixture(scope="class")
-    def built_case(self, cesm_root, scratch_dir):
+    def built_case(self, ctsm_root, scratch_dir):
         case_path = scratch_dir / "test_build_i2000"
-        create_script = os.path.join(cesm_root, "cime", "scripts", "create_newcase")
+        create_script = os.path.join(ctsm_root, "cime", "scripts", "create_newcase")
 
         result = run([
             create_script,
@@ -76,7 +76,12 @@ class TestCaseBuild:
         return case_path
 
     def test_build_produces_executable(self, built_case):
-        bld_dir = built_case / "bld"
+        import pathlib
+        scratch = pathlib.Path(os.environ.get("HOME", "/home/user")) / "scratch"
+        case_name = built_case.name
+        bld_dir = scratch / case_name / "bld"
+        if not bld_dir.exists():
+            bld_dir = built_case / "bld"
         exes = list(bld_dir.glob("cesm.exe")) + list(bld_dir.glob("*.exe"))
         assert len(exes) > 0, f"No executable found in {bld_dir}"
 

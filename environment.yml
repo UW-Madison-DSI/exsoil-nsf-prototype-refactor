@@ -5,16 +5,13 @@ channels:
 
 dependencies:
   # --- Python ---
-  # Pin to 3.11: CIME 2.2.x uses 'import imp' which was removed in 3.12
-  - python >=3.11,<3.12
+  - python >=3.11
 
-  # --- Compilers & build (needed for CESM case.build) ---
+  # --- Compilers & build (needed for CTSM case.build) ---
   - gfortran
   - gcc
   - gxx
-  # Pin cmake <4: CESM 2.2.2's PIO uses cmake_minimum_required(VERSION 3.0.2)
-  # which cmake 4.x rejects (compat with <3.5 removed)
-  - cmake >=3.28,<4
+  - cmake
   - make
   - m4
 

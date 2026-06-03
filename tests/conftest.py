@@ -2,8 +2,8 @@
 Pytest configuration for container validation tests.
 
 These tests validate that the multi-arch Docker image provides the
-functionality documented in CESM tutorials and workshops
-(https://www.cesm.ucar.edu/events/tutorials).
+functionality required for CTSM/NEON tower site workflows and
+scientific Python analysis.
 
 Tests are organized into tiers by execution time and dependency:
 
@@ -28,8 +28,8 @@ def pytest_configure(config):
 
 
 @pytest.fixture(scope="session")
-def cesm_root():
-    return os.environ.get("CESMROOT", "/opt/ncar/cesm")
+def ctsm_root():
+    return os.environ.get("CESMROOT", "/opt/ncar/ctsm")
 
 
 @pytest.fixture(scope="session")
@@ -39,4 +39,4 @@ def conda_prefix():
 
 @pytest.fixture(scope="session")
 def scratch_dir(tmp_path_factory):
-    return tmp_path_factory.mktemp("cesm_test_cases")
+    return tmp_path_factory.mktemp("ctsm_test_cases")

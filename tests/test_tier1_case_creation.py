@@ -27,27 +27,27 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 class TestQueryConfig:
     """query_config must list compsets and grids (tutorial step 1)."""
 
-    def test_query_compsets(self, cesm_root):
-        script = os.path.join(cesm_root, "cime", "scripts", "query_config")
+    def test_query_compsets(self, ctsm_root):
+        script = os.path.join(ctsm_root, "cime", "scripts", "query_config")
         result = run([script, "--compsets"])
         assert result.returncode == 0, f"query_config --compsets failed:\n{result.stderr}"
         assert "I2000" in result.stdout or "B1850" in result.stdout
 
-    def test_query_grids(self, cesm_root):
-        script = os.path.join(cesm_root, "cime", "scripts", "query_config")
+    def test_query_grids(self, ctsm_root):
+        script = os.path.join(ctsm_root, "cime", "scripts", "query_config")
         result = run([script, "--grids"])
         assert result.returncode == 0, f"query_config --grids failed:\n{result.stderr}"
         assert "f19_g17" in result.stdout or "f09" in result.stdout
 
-    def test_create_newcase_help(self, cesm_root):
-        script = os.path.join(cesm_root, "cime", "scripts", "create_newcase")
+    def test_create_newcase_help(self, ctsm_root):
+        script = os.path.join(ctsm_root, "cime", "scripts", "create_newcase")
         result = run([script, "--help"])
         assert result.returncode == 0
         assert "--case" in result.stdout
         assert "--compset" in result.stdout
 
 
-# ── Case creation (I2000Clm50Sp: lightweight land-only) ─────────────────
+# ── Case creation (I2000Clm60Sp: lightweight land-only) ─────────────────
 
 class TestCaseCreation:
     """
@@ -56,13 +56,13 @@ class TestCaseCreation:
     following the CESM tutorial pattern of starting with a simple case.
     """
 
-    COMPSET = "I2000Clm50Sp"
+    COMPSET = "I2000Clm60Sp"
     RES = "f19_g17"
 
     @pytest.fixture(scope="class")
-    def case_dir(self, cesm_root, scratch_dir):
+    def case_dir(self, ctsm_root, scratch_dir):
         case_path = scratch_dir / "test_i2000"
-        script = os.path.join(cesm_root, "cime", "scripts", "create_newcase")
+        script = os.path.join(ctsm_root, "cime", "scripts", "create_newcase")
         result = run([
             script,
             "--case", str(case_path),
