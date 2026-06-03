@@ -2,115 +2,83 @@
 
 ## What is this?
 
-This container is a ready-to-use environment for running land surface
-simulations at NEON ecological observatory sites using CTSM, the
-Community Terrestrial Systems Model. You launch the container, open
-JupyterLab in your browser, and start working with climate model
-simulations and real-world observational data. No software installation
-beyond Docker is required.
+This container gives you a pre-configured CTSM environment for running
+single-point CLM simulations at NEON tower sites and analyzing the
+output. Everything you need is already installed: CTSM 5.4 with NEON
+usermods for 48 sites, the full CIME case management toolchain, and a
+Python analysis stack (xarray, cartopy, matplotlib, and friends). You
+open JupyterLab in your browser and start working.
 
-## What is inside the container?
+The goal is to remove the infrastructure burden. Instead of spending
+days compiling libraries, configuring compilers, and debugging Fortran
+dependency chains, you spend your time on the science: designing
+experiments, running simulations, and interpreting results.
 
-The container packages three layers of software so you don't have to
-install or configure any of them yourself:
+## What is inside
 
-### CTSM (the model)
+### CTSM 5.4 with NEON usermods
 
-CTSM is the Community Terrestrial Systems Model, developed and
-maintained by NCAR (National Center for Atmospheric Research). It
-simulates what happens at and below the land surface:
+The container includes CTSM at tag `ctsm5.4.002` with site-specific
+usermods for 48 NEON tower locations. Each usermods directory contains
+the grid cell, surface datasets, and namelist overrides needed to run
+CLM at that site. You can create a point simulation at Konza Prairie or
+Harvard Forest with a single command.
 
-- **Soil physics:** how soil heats, cools, and holds water at different
-  depths
-- **Vegetation:** how plants grow, photosynthesize, and exchange carbon
-  dioxide with the atmosphere
-- **Hydrology:** how water moves through soil, runs off into rivers,
-  and evaporates
-- **Snow:** how snowpack accumulates, ages, and melts
-- **Carbon cycling:** how carbon moves between soil, plants, and the
-  atmosphere
+The CTSM source code, CIME infrastructure, and all component
+dependencies (CDEPS, CMEPS, MOSART, ParallelIO) are checked out and
+ready. The Fortran compilers (gfortran via conda-forge) and MPI
+libraries (MPICH) are pre-installed. `case.build` compiles natively on
+the container's architecture in about two minutes.
 
-CTSM is written in Fortran and runs as a compiled executable. The
-container includes both the source code and the compiler toolchain
-needed to build it.
+### Python analysis environment
 
-### NEON tower site workflow
+The analysis stack is the standard set of tools you would expect for
+working with CLM output:
 
-NEON (the National Ecological Observatory Network) operates 81
-instrumented field sites across the United States. Each site has a tower
-that continuously measures environmental variables like air temperature,
-soil moisture at multiple depths, wind speed, and carbon dioxide fluxes.
+| Purpose | Packages |
+|---------|----------|
+| NetCDF I/O | xarray, netCDF4, h5py, h5netcdf |
+| Computation | numpy, scipy, pandas, scikit-learn |
+| Visualization | matplotlib, cartopy, bokeh, holoviews, hvplot, panel |
+| Geospatial | cartopy, geopandas, rasterio, gdal, shapely, esmpy |
+| Large datasets | dask (chunked lazy loading) |
+| Cloud data | boto3, s3fs, fsspec |
 
-The container comes pre-configured with site-specific settings for 48
-NEON tower locations. This means you can run CTSM at a real-world site
-(say, Konza Prairie in Kansas or Harvard Forest in Massachusetts), feed
-it the actual weather that was observed at that tower, and then compare
-CTSM's predictions against what the instruments measured. This is how
-researchers evaluate whether the model is getting the science right.
+Everything is pinned via conda-lock for reproducibility across
+platforms. The same versions resolve on both Intel/AMD and Apple
+Silicon.
 
-### Python scientific stack
+### Multi-platform support
 
-The container includes a full Python environment for analyzing model
-output:
+The container runs natively on both Intel/AMD (amd64) and Apple Silicon
+(arm64) machines. If you are on a newer Mac, this means no emulation
+overhead and no kernel crashes during heavy cartopy rendering or Fortran
+compilation. Docker selects the right architecture automatically when
+you pull the image.
 
-- **xarray** and **netCDF4** for reading CLM output files (which are in
-  NetCDF format, the standard for climate data)
-- **numpy**, **scipy**, and **pandas** for numerical computation
-- **matplotlib** and **cartopy** for plotting and map visualization
-- **bokeh**, **holoviews**, **hvplot**, and **panel** for interactive
-  dashboards
-- **JupyterLab** for the notebook interface you're reading this in
-- **dask** for working with datasets too large to fit in memory
+## Quick start
 
-## Who is this for?
-
-This container is designed for researchers, students, and developers
-who want to:
-
-- **Run CTSM at NEON sites** to evaluate land model performance against
-  real observations
-- **Analyze CLM output** with Python without worrying about Fortran
-  compilation, library dependencies, or environment configuration
-- **Develop and test perturbation experiments** (e.g., "what happens to
-  soil carbon if precipitation increases by 10%?")
-- **Reproduce results** across different machines (Intel/AMD desktops,
-  Apple Silicon Macs, cloud servers) using the same container image
-
-You do not need to know Fortran. The notebooks handle model execution
-through wrapper scripts; your interaction is primarily through Python
-and JupyterLab.
-
-## How to run it
-
-### Start the container
+### 1. Launch the container
 
 ```bash
 docker run --rm -p 8888:8888 exsoil-arm64-test
 ```
 
-This starts JupyterLab inside the container. Copy the URL printed in
-the terminal (it looks like `http://127.0.0.1:8888/lab?token=...`) and
-open it in your browser.
+Copy the URL from the terminal output and open it in your browser. You
+will see the JupyterLab interface.
 
-### Open the getting started notebook
+### 2. Open the introductory notebook
 
-In JupyterLab's file browser, open `notebooks/Getting_Started_CTSM_NEON.ipynb`.
-Run each cell in order. This notebook walks through the Python
-environment, NetCDF I/O, map rendering, and NEON site setup without
-requiring any credentials or data downloads.
+Navigate to `notebooks/Getting_Started_CTSM_NEON.ipynb` and run it
+cell by cell. It walks through the environment, demonstrates NetCDF I/O
+and cartopy map rendering, shows you which NEON sites are available, and
+creates a sample case at Konza Prairie. No credentials needed.
 
-### Run with S3 credentials (for full workflows)
+### 3. Run with S3 credentials
 
-The project's analysis notebooks (Data_Hub, Design_Hub, Modeling_Hub)
-download forcing data and model output from S3 cloud storage. To use
-them, create a `.env` file with your credentials and pass it to the
-container:
-
-```bash
-docker run --rm -p 8888:8888 --env-file .env exsoil-arm64-test
-```
-
-The `.env` file should contain:
+The project's science notebooks (Data_Hub, Design_Hub, Modeling_Hub)
+pull forcing data and model output from S3 storage. Create a file
+called `.env` with your credentials:
 
 ```
 COS_ACCESS_KEY_ID=your-access-key
@@ -118,11 +86,17 @@ COS_SECRET_ACCESS_KEY=your-secret-key
 AWS_DEFAULT_REGION=us-east-1
 ```
 
-### Persist your work
+Then launch with:
 
-By default, files created inside the container are lost when the
-container stops. To keep your notebooks and output between sessions,
-mount a local directory:
+```bash
+docker run --rm -p 8888:8888 --env-file .env exsoil-arm64-test
+```
+
+### 4. Save your work
+
+Files inside the container are temporary by default. To persist
+notebooks, output, and case directories between sessions, mount a local
+folder:
 
 ```bash
 docker run --rm -p 8888:8888 \
@@ -130,73 +104,62 @@ docker run --rm -p 8888:8888 \
   exsoil-arm64-test
 ```
 
-Files saved under `/home/user/my-work` inside the container will appear
-in the `my-work/` directory on your host machine.
+Anything you save under `my-work/` inside JupyterLab will appear in the
+`my-work/` folder on your local machine.
 
-## How the pieces fit together
+## Typical workflow
 
-```
-You (browser)
-    |
-    v
-JupyterLab (port 8888)
-    |
-    +--- Python notebooks
-    |       |
-    |       +--- xarray / matplotlib / cartopy (analysis + visualization)
-    |       |
-    |       +--- run_neon_v2.py (orchestrates CTSM runs)
-    |
-    +--- CTSM source tree (/opt/ncar/ctsm)
-    |       |
-    |       +--- CIME (build system: create_newcase, case.setup, case.build)
-    |       |
-    |       +--- CLM Fortran code (compiled at runtime via case.build)
-    |       |
-    |       +--- NEON usermods (48 site configurations)
-    |
-    +--- conda-forge libraries
-            |
-            +--- MPICH, HDF5, NetCDF, PNetCDF (I/O and parallel computing)
-            +--- gfortran, gcc (compilers for building CLM)
-```
+1. **Choose a NEON site.** The container has usermods for 48 sites.
+   Run the Getting Started notebook to see the full list, or check the
+   [NEON site map](https://www.neonscience.org/field-sites/explore-field-sites).
 
-The typical workflow is:
+2. **Create and configure a case.** The `run_neon_v2` wrapper handles
+   CIME case creation, namelist configuration, and site-specific setup
+   in one command. The project's notebooks call this for you.
 
-1. **Choose a NEON site** (e.g., KONZ for Konza Prairie)
-2. **Create a case** using CIME's `create_newcase` with the site's usermods
-3. **Set up the case** (`case.setup` generates namelists and build scripts)
-4. **Build the model** (`case.build` compiles the Fortran code, ~2 min)
-5. **Run the simulation** (`case.submit` executes CLM, minutes to hours
-   depending on run length)
-6. **Analyze output** in Python using xarray to load the NetCDF history
-   files and matplotlib/cartopy to visualize results
+3. **Build the model.** CIME's `case.build` compiles CLM from Fortran
+   source for the specific case configuration. This takes about two
+   minutes on a modern laptop and only needs to happen once per
+   compset/resolution combination.
 
-Steps 2-5 are handled by the `run_neon_v2` wrapper script in the
-project's notebooks, so you typically don't need to run CIME commands
-directly.
+4. **Run the simulation.** CLM executes with the site's observed
+   atmospheric forcing data. Run length depends on the experiment:
+   a single year at one NEON site takes a few minutes; a multi-decade
+   transient run takes longer.
+
+5. **Analyze output.** CLM writes history files in NetCDF format. Load
+   them with xarray, compute diagnostics (soil temperature profiles,
+   carbon fluxes, water balance), compare against NEON tower
+   observations, and visualize with matplotlib or cartopy.
+
+The project's notebooks automate steps 2-4 through the `run_neon_v2`
+wrapper script, so the typical interaction is: choose a site, choose
+a perturbation (or none for a control run), execute the notebook cells,
+and analyze the output.
 
 ## Project notebooks
 
-| Notebook | What it does | Requires credentials? |
-|----------|-------------|----------------------|
-| `Getting_Started_CTSM_NEON` | Environment check, NEON site discovery, case creation demo | No |
-| `Data_Hub` | Load and visualize CLM output from S3, soil profile plots | Yes |
-| `Design_Hub_v2` | Run CTSM at NEON sites with perturbation experiments | Yes |
-| `Modeling_Hub` | Full modeling workflow with parameter sensitivity analysis | Yes |
-| `pft_perturbation_comparison` | Compare control and perturbed PFT simulations | Yes |
+| Notebook | Purpose | Needs credentials? |
+|----------|---------|-------------------|
+| **Getting_Started_CTSM_NEON** | Verify the environment, explore NEON sites, create a sample case | No |
+| **Data_Hub** | Load CLM output from S3, visualize soil profiles and time series | Yes |
+| **Design_Hub_v2** | Run CLM at NEON sites with forcing perturbations (precipitation scaling, temperature offsets, etc.) | Yes |
+| **Modeling_Hub** | Full modeling workflow with parameter sensitivity experiments | Yes |
+| **pft_perturbation_comparison** | Compare control and perturbed plant functional type simulations | Yes |
 
-Start with `Getting_Started_CTSM_NEON` to verify the container is
-working, then move to the other notebooks once you have S3 credentials
-configured.
+Start with **Getting_Started_CTSM_NEON** to confirm the container is
+working on your machine. The other notebooks build on it.
 
-## Further reading
+## Where to learn more
 
-- [CTSM Documentation](https://escomp.github.io/CTSM/) -- official
-  CTSM user guide covering model physics, configuration, and output
+- [CTSM User's Guide](https://escomp.github.io/CTSM/) -- model
+  physics, configuration options, and output variables
 - [NCAR CTSM Tutorial](https://github.com/NCAR/CTSM-Tutorial) --
-  hands-on tutorial notebooks from NCAR
+  step-by-step tutorial notebooks from NCAR, including NEON exercises
 - [NEON Data Portal](https://data.neonscience.org/) -- browse and
-  download observational data from NEON tower sites
+  download tower observations for model-data comparison
+- [CLM Technical Note](https://escomp.github.io/ctsm-docs/) --
+  detailed description of CLM's biogeophysics, biogeochemistry, and
+  numerical methods
 - [xarray Documentation](https://docs.xarray.dev/) -- the primary
-  tool for working with CLM NetCDF output in Python
+  tool for working with NetCDF model output in Python
