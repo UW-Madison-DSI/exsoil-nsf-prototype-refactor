@@ -81,6 +81,7 @@ Nothing currently in progress. The feature branch
 | Item | Priority | Description |
 |------|----------|-------------|
 | **NEON simulation pipeline** | High | The `Modeling_Hub` notebook requires CLM history files from a completed transient run and NEON evaluation files, neither of which are currently producible in the container. Needs: (1) implement or document the end-to-end run workflow, (2) implement `download_eval_files` to fetch NEON tower observations, or (3) bundle sample data for one site/year. |
+| **CTSM input data availability** | High | CTSM 5.4.002 references CMIP7-era input datasets not yet on NCAR's servers (8 GB downloaded, then failed on missing NEON surface data and CMIP7 forcing files). CTSM 5.2.005 was tested as a fallback but has Python 3.13 CIME incompatibility. Staying with 5.4; need to report to ESCOMP and investigate alternative data sources. See [decision brief](decisions/002-ctsm-version-selection.md). |
 | **amd64 build validation** | Medium | All local testing was on arm64. The amd64 image builds in CI but has not been tested through the test suite. Run tier0+tier1 on an amd64 machine. |
 | **CI test integration** | Medium | Wire the test suite into the GitHub Actions workflow. At minimum, run tier0+tier1 on both architectures after each push. |
 | **PR and merge to dev** | Medium | Open PR from `feature/arm64-multiarch-rebuild` to `dev` (or `main` per team workflow). |

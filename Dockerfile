@@ -81,11 +81,19 @@ RUN groupadd -r ctsm \
     && useradd -r -m -g ctsm -G sudo -s /bin/bash user \
     && echo "user ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
+# Clone CTSM and check out external components.
+# CTSM 5.2 uses manage_externals; 5.4+ uses git-fleximod.
 RUN git clone --branch ${CTSM_TAG} \
         https://github.com/ESCOMP/CTSM.git ${CTSM_ROOT} \
     && cd ${CTSM_ROOT} \
-    && ./bin/git-fleximod update \
-    || (cd ${CTSM_ROOT} && git submodule update --init --recursive && ./bin/git-fleximod update)
+    && if [ -x ./bin/git-fleximod ]; then \
+         ./bin/git-fleximod update \
+         || (git submodule update --init --recursive && ./bin/git-fleximod update); \
+       elif [ -x ./manage_externals/checkout_externals ]; then \
+         ./manage_externals/checkout_externals; \
+       else \
+         echo "ERROR: No checkout tool found" && exit 1; \
+       fi
 
 # Overlay container machine configs with conda-forge paths.
 # ccs_config ships a container definition pointing at /usr/local;
