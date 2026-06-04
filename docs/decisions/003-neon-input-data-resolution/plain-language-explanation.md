@@ -22,10 +22,14 @@ for the years 2018-2021," it needs several kinds of input data:
   radiation for every time step of the simulation, typically from
   the NEON tower's own gap-filled observations
 
-**Global forcing and boundary data:**
+**Global forcing and boundary data (CMIP datasets):**
 - Nitrogen deposition (ndep), aerosol deposition (presaero),
   ozone concentrations (preso3), population density (for the fire
   model), crop calendars, and CO2 concentrations
+- These come from the CMIP (Coupled Model Intercomparison Project)
+  data pipeline, which produces standardized global datasets used
+  across all climate modeling centers. CMIP6 is the established
+  generation; CMIP7 is the new one, still being prepared.
 
 CLM can't run without all of these. Before a simulation starts,
 a script called `check_input_data` goes through the list and
