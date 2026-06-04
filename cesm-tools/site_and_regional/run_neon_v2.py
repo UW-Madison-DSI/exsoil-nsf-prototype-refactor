@@ -846,6 +846,10 @@ class NeonSite:
                     user_mods_dirs=user_mods_dirs,
                     driver="nuopc",
                 )
+                # CTSM 5.4 NEON runs use SSP3-7.0 forcing dates (2018+)
+                # but IHist compsets default CLM_CMIP_ERA to cmip7.
+                # CMIP7 SSP data doesn't exist yet; force cmip6. (ADR-0006)
+                case.set_value("CLM_CMIP_ERA", "cmip6")
                 case.case_setup()
             else:
                 existingcompname = case.get_value("COMPSET")
