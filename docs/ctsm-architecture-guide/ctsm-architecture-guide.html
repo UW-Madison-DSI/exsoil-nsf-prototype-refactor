@@ -186,7 +186,7 @@
 
 <p><strong>CESM</strong> (Community Earth System Model) is NCAR's flagship climate model. It couples separate models for the atmosphere (CAM), ocean (POP), sea ice (CICE), ice sheets (CISM), and land surface (CLM) into a single interacting Earth system. In a fully coupled CESM run, the land surface influences the atmosphere, which influences the ocean, which feeds back to the atmosphere and land. This is how researchers study large-scale climate dynamics.</p>
 
-<p><strong>CTSM</strong> (Community Terrestrial Systems Model) extracts just the land surface part -- CLM -- and gives it everything it needs to run on its own, without the atmosphere, ocean, or ice models. Instead of a simulated atmosphere, CTSM feeds CLM observed weather data (from NEON towers or reanalysis products) through a component called DATM (data atmosphere). This is much cheaper computationally and is the right tool when the research question is about the land surface itself, not about atmosphere-land-ocean interactions.</p>
+<p><strong>CTSM</strong> (Community Terrestrial Systems Model) extracts just the land surface part (CLM) and gives it everything it needs to run on its own, without the atmosphere, ocean, or ice models. Instead of a simulated atmosphere, CTSM feeds CLM observed weather data (from NEON towers or reanalysis products) through a component called DATM (data atmosphere). This is much cheaper computationally and is the right tool when the research question is about the land surface itself, not about atmosphere-land-ocean interactions.</p>
 
 <div style="margin: 1.5rem 0; padding: 1rem; background: var(--uw-light); border-radius: 8px; border: 1px solid #ddd; font-size: 0.9rem;">
 
@@ -223,7 +223,7 @@
 
 <p>The NEON tower workflow was developed specifically for CTSM. It is not available in standard CESM releases (it will arrive when CESM 3.x ships, which is still in beta). This is why the container uses CTSM rather than CESM: it is NCAR's intended platform for running CLM at NEON sites.</p>
 
-<p>The trade-off is that CTSM cannot run fully coupled experiments where land surface changes (e.g., deforestation, irrigation) feed back into the atmosphere and alter regional weather patterns. For the current project -- evaluating CLM predictions against tower observations and testing forcing perturbations -- standalone CTSM is the right tool.</p>
+<p>The trade-off is that CTSM cannot run fully coupled experiments where land surface changes (e.g., deforestation, irrigation) feed back into the atmosphere and alter regional weather patterns. For the current project (evaluating CLM predictions against tower observations and testing forcing perturbations), standalone CTSM is the right tool.</p>
 
 <h2>What This Project Does</h2>
 
@@ -381,17 +381,17 @@ how the pieces work together.</p>
   <div class="wf-input">
     <strong>Input data (flows in)</strong>
     <ul style="font-size: 0.82rem; margin-top: 0.3rem; padding-left: 1rem;">
-      <li><strong>Surface datasets</strong> -- soil texture, topography, vegetation type, land use for the grid cell</li>
-      <li><strong>Atmospheric forcing</strong> -- gap-filled NEON tower observations: temperature, humidity, precipitation, wind, radiation</li>
-      <li><strong>Parameter files</strong> -- CLM physics parameters (plant functional types, soil biogeochemistry constants)</li>
+      <li><strong>Surface datasets</strong>: soil texture, topography, vegetation type, land use for the grid cell</li>
+      <li><strong>Atmospheric forcing</strong>: gap-filled NEON tower observations: temperature, humidity, precipitation, wind, radiation</li>
+      <li><strong>Parameter files</strong>: CLM physics parameters (plant functional types, soil biogeochemistry constants)</li>
     </ul>
   </div>
   <div class="wf-output">
     <strong>Output data (flows out)</strong>
     <ul style="font-size: 0.82rem; margin-top: 0.3rem; padding-left: 1rem;">
-      <li><strong>History files</strong> -- NetCDF files with predicted soil temperature, moisture, carbon fluxes, energy balance, etc.</li>
-      <li><strong>Restart files</strong> -- model state snapshots for continuing a run later</li>
-      <li><strong>Log files</strong> -- timing, diagnostics, warnings</li>
+      <li><strong>History files</strong>: NetCDF files with predicted soil temperature, moisture, carbon fluxes, energy balance, etc.</li>
+      <li><strong>Restart files</strong>: model state snapshots for continuing a run later</li>
+      <li><strong>Log files</strong>: timing, diagnostics, warnings</li>
     </ul>
   </div>
 </div>
@@ -409,10 +409,10 @@ how the pieces work together.</p>
       <li><strong>Site:</strong> Konza Prairie, KS</li>
       <li><strong>Compset:</strong> I1PtClm60Bgc</li>
       <li><strong>Period:</strong> 2018-2022</li>
-      <li><code>user_nl_clm</code> -- CLM namelist overrides</li>
-      <li><code>env_run.xml</code> -- run length, restart options</li>
-      <li><code>bld/cesm.exe</code> -- compiled model</li>
-      <li><code>run/</code> -- active simulation directory</li>
+      <li><code>user_nl_clm</code>: CLM namelist overrides</li>
+      <li><code>env_run.xml</code>: run length, restart options</li>
+      <li><code>bld/cesm.exe</code>: compiled model</li>
+      <li><code>run/</code>: active simulation directory</li>
     </ul>
   </div>
   <div class="case-box" style="border-color: var(--uw-green);">
@@ -421,10 +421,10 @@ how the pieces work together.</p>
       <li><strong>Site:</strong> Harvard Forest, MA</li>
       <li><strong>Compset:</strong> I1PtClm60Bgc</li>
       <li><strong>Period:</strong> 2018-2022</li>
-      <li><code>user_nl_clm</code> -- different site params</li>
-      <li><code>env_run.xml</code> -- same run length</li>
-      <li><code>bld/cesm.exe</code> -- same compiled model</li>
-      <li><code>run/</code> -- different forcing data</li>
+      <li><code>user_nl_clm</code>: different site params</li>
+      <li><code>env_run.xml</code>: same run length</li>
+      <li><code>bld/cesm.exe</code>: same compiled model</li>
+      <li><code>run/</code>: different forcing data</li>
     </ul>
   </div>
   <div class="case-box" style="border-color: #e67e22;">
@@ -434,8 +434,8 @@ how the pieces work together.</p>
       <li><strong>Compset:</strong> I1PtClm60Bgc</li>
       <li><strong>Period:</strong> 2018-2022</li>
       <li><strong>Perturbation:</strong> precip +10%</li>
-      <li><code>user_nl_clm</code> -- same as KONZ base</li>
-      <li><code>env_run.xml</code> -- same run length</li>
+      <li><code>user_nl_clm</code>: same as KONZ base</li>
+      <li><code>env_run.xml</code>: same run length</li>
       <li>Uses transformed forcing data</li>
     </ul>
   </div>
