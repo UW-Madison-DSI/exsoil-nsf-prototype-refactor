@@ -163,8 +163,11 @@
   code { background: var(--uw-light); padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.85em; font-family: "SF Mono", Menlo, monospace; }
 
   @media print {
-    .arch-container, .workflow, .case-diagram, table { break-inside: avoid; page-break-inside: avoid; }
-    h2 { break-after: avoid; }
+    .arch-container, .workflow, .case-diagram, table,
+    .wf-io-row, .arch-row, ol { break-inside: avoid; page-break-inside: avoid; }
+    h2, h3 { break-after: avoid; page-break-after: avoid; }
+    /* Keep the CESM family tree diagram together */
+    div[style*="background: var(--uw-light)"] { break-inside: avoid; page-break-inside: avoid; }
   }
   @media (max-width: 600px) {
     .workflow { flex-direction: column; }
