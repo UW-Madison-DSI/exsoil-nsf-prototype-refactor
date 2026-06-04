@@ -1,6 +1,6 @@
 # ADR-0006: Set CLM_CMIP_ERA=cmip6 for NEON Runs
 
-**Status:** Proposed (pending validation)
+**Status:** Tested -- insufficient (see results below)
 **Date:** 2026-06-04
 **Decision makers:** Steven Wangen
 
@@ -72,6 +72,34 @@ Or add to the NEON defaults usermods `shell_commands`:
   (`surfdata_1x1_NEON_KONZ_hist_2000_78pfts_c251023.nc`), which may
   need to come from the NEON science server or be generated. Testing
   will determine if `CLM_CMIP_ERA=cmip6` resolves this file as well.
+
+## Test Results (2026-06-04)
+
+The fix was implemented and tested. **It did not resolve the issue.**
+
+Setting `CLM_CMIP_ERA=cmip6` did not change which files the namelist
+generator requested for several key variables. The same files were
+missing as in the unfixed run:
+
+- NEON surface dataset (`surfdata_1x1_NEON_KONZ...ctsm5.4.0`)
+- CMIP7 population density (still requested despite cmip6 flag)
+- CLM6 parameter file (`clm60_params.ctsm6_li2024.c250822.nc`)
+- SSP ozone, nitrogen deposition
+- Crop calendars, dust roughness, snow optics, urban data, excess ice
+
+The problem is broader than the CMIP era flag. Many of these files
+(parameter file, snow optics, crop calendars) are not era-dependent
+at all. They are simply ctsm5.4-specific files that NCAR has not
+published to any public data server.
+
+**Conclusion:** The data availability issue cannot be resolved from
+the container side. It requires NCAR to publish the input data for
+ctsm5.4.002 to their public servers. Filing a GitHub issue on
+ESCOMP/CTSM is the next step.
+
+The `CLM_CMIP_ERA=cmip6` override remains in `run_neon_v2.py` as it
+is still correct per the release notes (SSP-period data should use
+CMIP6), even though it alone does not resolve the download failures.
 
 ## Related
 
