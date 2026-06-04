@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Why Simulations Can't Run Yet</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 750px; margin: 0 auto; padding: 2rem; line-height: 1.7; color: #282728; }
+h1 { font-size: 1.5rem; border-bottom: 3px solid #c5050c; padding-bottom: 0.4rem; }
+h2 { font-size: 1.15rem; color: #c5050c; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 0.2rem; }
+p { margin: 0.7rem 0; }
+strong { color: #282728; }
+code { background: #f7f7f7; padding: 0.15rem 0.35rem; border-radius: 3px; font-size: 0.88em; font-family: "SF Mono", Menlo, monospace; }
+pre { background: #f7f7f7; border: 1px solid #ddd; padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 1rem 0; }
+pre code { background: none; padding: 0; }
+ul { margin: 0.5rem 0; padding-left: 1.5rem; }
+li { margin: 0.3rem 0; }
+@media print { h2 { break-after: avoid; } pre, ul { break-inside: avoid; } }
+</style></head><body>
+<h1>Why the Container Can't Run Simulations Yet (Plain Language)</h1>
+<h2>The short version</h2>
+<p>The container has everything installed and working except for one
+problem: when CLM tries to start a simulation, it needs to download
+several large data files from NCAR's servers. Some of those files
+don't exist on the servers yet. We know why, and we have a fix to
+try.</p>
+<h2>How a simulation gets its data</h2>
+<p>When you tell CLM "run a simulation at the Konza Prairie NEON site
+for the years 2018-2021," it needs several kinds of input data:</p>
+<p><strong>Things that describe the site:</strong>
+- What kind of soil is there (clay, sand, loam)
+- What vegetation grows there (tallgrass prairie)
+- The topography and land use history</p>
+<p><strong>Things that describe the weather:</strong>
+- Temperature, humidity, wind speed, precipitation, and solar
+  radiation for every time step of the simulation
+- These come from the NEON tower's own instruments</p>
+<p><strong>Things that describe the global background:</strong>
+- How much nitrogen falls from the atmosphere onto the soil
+- What aerosol particles are in the air (affects radiation)
+- Ozone concentrations (affects plant biology)
+- Population density (affects the fire model)</p>
+<p>CLM can't run without all of these. Before a simulation starts,
+a script called <code>check_input_data</code> goes through the list and
+downloads anything that's missing from NCAR's public file servers.</p>
+<h2>What goes wrong</h2>
+<p>The download script checks NCAR's servers and several files come
+back as "not found." The simulation stops before it even begins.</p>
+<p>The files that are missing are the ones describing the global
+background: nitrogen deposition, aerosols, ozone, population
+density, and a few others. The site-specific files and weather
+data are also missing, but for a related reason.</p>
+<h2>Why the files are missing</h2>
+<p>This requires understanding one piece of climate modeling context:</p>
+<p>Climate models use standardized sets of input data that correspond
+to different "eras" of climate research. Right now there are two
+relevant ones:</p>
+<ul>
+<li>
+<p><strong>CMIP6</strong> data: the established set, used for the last several
+  years of research. All of these files exist on NCAR's servers.</p>
+</li>
+<li>
+<p><strong>CMIP7</strong> data: the new set, currently being prepared for the
+  next generation of climate projections. Some of these files exist
+  (the ones covering the historical period, 1850-2023), but files
+  covering future scenarios do not exist yet.</p>
+</li>
+</ul>
+<p>CTSM 5.4 introduced a setting called <code>CLM_CMIP_ERA</code> that controls
+which set of files the model asks for. It's supposed to work like
+this:</p>
+<ul>
+<li>
+<p>If you're running a <strong>future scenario</strong> simulation (called SSP):
+  use CMIP6 data (because CMIP7 future data doesn't exist yet)</p>
+</li>
+<li>
+<p>If you're running a <strong>historical</strong> simulation: use CMIP7 data
+  (because it's newer and better for the historical period)</p>
+</li>
+</ul>
+<p>The NEON tower workflow falls into a gap between these two categories.</p>
+<h2>The gap</h2>
+<p>NEON simulations cover 2018-2021. The historical period in climate
+modeling ends around 2014. So NEON runs extend into the "future
+scenario" time range, even though they're really just running through
+recent observed years.</p>
+<p>To get data covering 2018-2021, the NEON configuration tells the
+model to use "SSP3-7.0" scenario data (this is just one specific
+future scenario that happens to have data files covering recent years).</p>
+<p>Here's the problem: the <code>CLM_CMIP_ERA</code> auto-detection looks at
+the simulation type, not the forcing dates. NEON uses a simulation
+type called "IHist" (historical with single-point data). Since
+"IHist" doesn't have "SSP" in its name, the auto-detection says
+"this is a historical run, use CMIP7 data."</p>
+<p>But the model then tries to find CMIP7 versions of the SSP3-7.0
+forcing files. Those CMIP7 SSP files don't exist. They haven't
+been created yet.</p>
+<p>If the auto-detection had recognized that the NEON case needs
+SSP-period data and switched to CMIP6, it would find the files
+just fine. The CMIP6 versions of all these SSP files are on the
+servers and have been for years.</p>
+<h2>The diagram</h2>
+<pre><code>What the NEON case requests:        What auto-detection chooses:
+  Simulation type: IHist        --&gt;   CLM_CMIP_ERA = cmip7  (because IHist != SSP)
+  Forcing dates: 2018-2021      --&gt;   Look for CMIP7 SSP files
+  Forcing scenario: SSP3-7.0         CMIP7 SSP files don't exist --&gt; FAIL
+
+What should happen:
+  Forcing dates: 2018-2021      --&gt;   These dates need SSP scenario data
+  SSP scenario data             --&gt;   CLM_CMIP_ERA should be cmip6
+  CMIP6 SSP files exist         --&gt;   SUCCESS
+</code></pre>
+<h2>The fix</h2>
+<p>Tell the model explicitly: "use CMIP6 data for this run." One line:</p>
+<pre><code>./xmlchange CLM_CMIP_ERA=cmip6
+</code></pre>
+<p>This isn't a workaround or a hack. The CTSM 5.4 release notes
+themselves say that SSP-period data should use CMIP6. The
+auto-detection just doesn't cover the specific case where a
+non-SSP simulation type uses SSP-era forcing dates.</p>
+<h2>What we still don't know</h2>
+<p>The <code>CLM_CMIP_ERA=cmip6</code> fix should resolve most of the missing
+files (aerosols, ozone, nitrogen deposition, population density).
+We haven't tested it yet.</p>
+<p>There's one file that might not be resolved: the NEON site-specific
+surface dataset (<code>surfdata_1x1_NEON_KONZ_...</code>). This file has
+"ctsm5.4.0" in its name, and there may not be a CMIP6-era
+equivalent. If this file is also missing after the fix, we'll need
+to investigate whether it's available on the NEON-specific data
+server or needs to be generated.</p>
+<h2>What works right now</h2>
+<p>Everything except running the actual simulation:</p>
+<ul>
+<li>The container builds and runs on both Intel/AMD and Apple Silicon</li>
+<li>JupyterLab starts, notebooks load</li>
+<li>All Python packages work (xarray, cartopy, matplotlib, etc.)</li>
+<li>CLM compiles from Fortran source (case.build produces an executable)</li>
+<li>The NEON site workflow can create and configure cases for 48 sites</li>
+<li>The Getting Started notebook runs completely</li>
+<li>90 automated tests pass</li>
+</ul>
+<p>The model is ready to go. It just can't fetch its input data because
+of this configuration mismatch.</p></body></html>
