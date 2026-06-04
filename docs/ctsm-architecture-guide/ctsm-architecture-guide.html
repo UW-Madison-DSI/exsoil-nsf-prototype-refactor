@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How CTSM, CLM, CIME, and NEON Fit Together</title>
+<style>
+  :root {
+    --uw-red: #c5050c;
+    --uw-dark: #282728;
+    --uw-gray: #646569;
+    --uw-light: #f7f7f7;
+    --uw-blue: #0479a8;
+    --uw-green: #3d7a38;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--uw-dark);
+    line-height: 1.65;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+  h1 { font-size: 1.7rem; border-bottom: 3px solid var(--uw-red); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+  h2 { font-size: 1.3rem; color: var(--uw-red); margin: 2.5rem 0 0.75rem; border-bottom: 1px solid #ddd; padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; }
+  p { margin: 0.6rem 0; }
+  .subtitle { color: var(--uw-gray); font-size: 0.95rem; margin-bottom: 2rem; }
+
+  /* Architecture diagram */
+  .arch-container {
+    border: 3px solid var(--uw-dark);
+    border-radius: 12px;
+    padding: 1rem;
+    margin: 1.5rem 0;
+    position: relative;
+  }
+  .arch-label {
+    position: absolute;
+    top: -0.7rem;
+    left: 1rem;
+    background: #fff;
+    padding: 0 0.5rem;
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .arch-desc {
+    font-size: 0.82rem;
+    color: var(--uw-gray);
+    margin: 0.3rem 0 0.75rem 0;
+    font-style: italic;
+  }
+  .arch-row {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin: 0.5rem 0;
+  }
+  .arch-box {
+    flex: 1;
+    min-width: 140px;
+    border: 2px solid;
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.85rem;
+  }
+  .arch-box .name { font-weight: 700; margin-bottom: 0.2rem; }
+  .arch-box .desc { font-size: 0.78rem; color: var(--uw-gray); }
+  .clm-box { border-color: var(--uw-green); background: #f0f8f0; }
+  .cime-box { border-color: var(--uw-blue); background: #f0f5fa; }
+  .data-box { border-color: #9b59b6; background: #faf0ff; }
+  .infra-box { border-color: var(--uw-gray); background: var(--uw-light); }
+  .python-box { border-color: #e67e22; background: #fef6ee; }
+  .docker-border { border-color: var(--uw-dark); }
+  .ctsm-border { border-color: var(--uw-red); }
+
+  /* Workflow diagram */
+  .workflow {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 1.5rem 0;
+    flex-wrap: wrap;
+  }
+  .wf-step {
+    flex: 1;
+    min-width: 130px;
+    border: 2px solid var(--uw-blue);
+    border-radius: 8px;
+    padding: 0.6rem;
+    text-align: center;
+    font-size: 0.82rem;
+    background: #f0f5fa;
+    position: relative;
+  }
+  .wf-step .step-num {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--uw-blue);
+    border-radius: 50%;
+    width: 1.3rem;
+    height: 1.3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.3rem;
+  }
+  .wf-step .step-name { font-weight: 700; font-size: 0.88rem; }
+  .wf-step .step-desc { font-size: 0.75rem; color: var(--uw-gray); margin-top: 0.2rem; }
+  .wf-arrow {
+    display: flex;
+    align-items: center;
+    font-size: 1.3rem;
+    color: var(--uw-gray);
+    padding: 0 0.15rem;
+  }
+  .wf-input, .wf-output {
+    border: 2px dashed;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    margin: 0.5rem 0;
+  }
+  .wf-input { border-color: var(--uw-green); background: #f0f8f0; }
+  .wf-output { border-color: #e67e22; background: #fef6ee; }
+  .wf-io-row {
+    display: flex;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .wf-io-row > div { flex: 1; }
+
+  /* Case diagram */
+  .case-diagram {
+    display: flex;
+    gap: 1rem;
+    margin: 1.5rem 0;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .case-box {
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    padding: 0.75rem;
+    flex: 1;
+    min-width: 200px;
+  }
+  .case-box h4 {
+    font-size: 0.9rem;
+    margin-bottom: 0.3rem;
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid #eee;
+  }
+  .case-box ul { list-style: none; padding: 0; font-size: 0.8rem; }
+  .case-box li { padding: 0.15rem 0; color: var(--uw-gray); }
+  .case-box li code { font-size: 0.75rem; }
+
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; }
+  th { background: var(--uw-light); font-weight: 600; }
+  code { background: var(--uw-light); padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.85em; font-family: "SF Mono", Menlo, monospace; }
+
+  @media print {
+    .arch-container, .workflow, .case-diagram, table { break-inside: avoid; page-break-inside: avoid; }
+    h2 { break-after: avoid; }
+  }
+  @media (max-width: 600px) {
+    .workflow { flex-direction: column; }
+    .wf-arrow { transform: rotate(90deg); justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<h1>How CTSM, CLM, CIME, and NEON Fit Together</h1>
+<div class="subtitle">A guide to the software components in the ExSOIL container</div>
+
+<p>This document explains what each piece of software in the container does, how they relate to each other, and what happens when you run a simulation at a NEON tower site. It is intended for researchers who understand the science (land surface modeling, NEON tower observations) but want a clearer picture of the software architecture.</p>
+
+<h2>Diagram 1: What Is in the Container</h2>
+
+<p>The container packages three layers of software. The outermost layer is the Docker container itself. Inside it, CTSM provides the model and build system. Alongside CTSM, the Python analysis stack provides tools for working with model output.</p>
+
+<div class="arch-container docker-border">
+  <span class="arch-label">Docker Container (Ubuntu 24.04)</span>
+  <div class="arch-desc">Everything packaged together. Runs on Intel/AMD and Apple Silicon.</div>
+
+  <div class="arch-row">
+    <div style="flex: 2;">
+      <div class="arch-container ctsm-border" style="margin: 0;">
+        <span class="arch-label" style="color: var(--uw-red);">CTSM 5.4 (Community Terrestrial Systems Model)</span>
+        <div class="arch-desc">The standalone land modeling framework. Contains the model code and everything needed to build and run it.</div>
+
+        <div class="arch-row">
+          <div class="arch-box clm-box">
+            <div class="name">CLM</div>
+            <div class="desc">Community Land Model. The Fortran code that simulates soil physics, vegetation, hydrology, carbon cycling, and snow.</div>
+          </div>
+          <div class="arch-box cime-box">
+            <div class="name">CIME</div>
+            <div class="desc">Build and run infrastructure. Handles case creation, Fortran compilation, namelist generation, and job execution.</div>
+          </div>
+        </div>
+
+        <div class="arch-row">
+          <div class="arch-box data-box">
+            <div class="name">DATM (CDEPS)</div>
+            <div class="desc">Data atmosphere. Reads observed weather files and feeds them to CLM as atmospheric forcing.</div>
+          </div>
+          <div class="arch-box data-box">
+            <div class="name">MOSART</div>
+            <div class="desc">River routing. Moves water from the land surface to river channels and ultimately to the ocean boundary.</div>
+          </div>
+          <div class="arch-box data-box">
+            <div class="name">CMEPS</div>
+            <div class="desc">Coupler. Passes fields (energy, water, momentum) between components at each time step.</div>
+          </div>
+        </div>
+
+        <div class="arch-row">
+          <div class="arch-box infra-box" style="flex: 2;">
+            <div class="name">NEON Usermods (48 sites)</div>
+            <div class="desc">Per-site configuration: grid cell, soil properties, vegetation type, surface datasets, and namelist overrides for each NEON tower location.</div>
+          </div>
+          <div class="arch-box infra-box">
+            <div class="name">Compilers</div>
+            <div class="desc">gfortran, gcc, MPICH, cmake. Build the Fortran model at runtime.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex: 1;">
+      <div class="arch-container" style="margin: 0; border-color: #e67e22;">
+        <span class="arch-label" style="color: #e67e22;">Python Analysis Stack</span>
+        <div class="arch-desc">Tools for working with CLM output after a simulation.</div>
+
+        <div class="arch-box python-box" style="margin-bottom: 0.4rem;">
+          <div class="name">xarray + netCDF4</div>
+          <div class="desc">Load and manipulate CLM history files</div>
+        </div>
+        <div class="arch-box python-box" style="margin-bottom: 0.4rem;">
+          <div class="name">matplotlib + cartopy</div>
+          <div class="desc">Plotting, maps, projections</div>
+        </div>
+        <div class="arch-box python-box" style="margin-bottom: 0.4rem;">
+          <div class="name">numpy + scipy + pandas</div>
+          <div class="desc">Numerical computation</div>
+        </div>
+        <div class="arch-box python-box" style="margin-bottom: 0.4rem;">
+          <div class="name">JupyterLab</div>
+          <div class="desc">Notebook interface (what you see in the browser)</div>
+        </div>
+        <div class="arch-box python-box">
+          <div class="name">analytics_modules</div>
+          <div class="desc">Project-specific: Kalman filter, model misfit, data access</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h3>Key relationships</h3>
+<table>
+  <tr><th>Term</th><th>What it is</th><th>Analogy</th></tr>
+  <tr><td><strong>CTSM</strong></td><td>The standalone land modeling project. Contains CLM plus everything it needs to run independently.</td><td>The car</td></tr>
+  <tr><td><strong>CLM</strong></td><td>The land model itself. Fortran code that does the science: soil heat transfer, water flow, plant growth, carbon cycling.</td><td>The engine</td></tr>
+  <tr><td><strong>CIME</strong></td><td>The build and run system. Creates cases, compiles Fortran, generates namelists, manages execution.</td><td>The assembly line + ignition system</td></tr>
+  <tr><td><strong>DATM</strong></td><td>Data atmosphere. Reads weather observations from files and delivers them to CLM as if they were coming from a real atmosphere model.</td><td>A tape player feeding pre-recorded weather to the engine</td></tr>
+  <tr><td><strong>A case</strong></td><td>A configured simulation directory. One specific experiment: this site, this time period, these physics options, these parameter tweaks.</td><td>A specific trip planned with the car: destination, route, departure time</td></tr>
+  <tr><td><strong>Usermods</strong></td><td>Per-site configuration files that customize a case for a specific NEON tower. Grid cell, soil type, vegetation, surface datasets.</td><td>GPS coordinates and local road conditions for the trip</td></tr>
+</table>
+
+<h2>Diagram 2: What Happens When You Run a Simulation</h2>
+
+<p>Running a CTSM simulation at a NEON site follows a four-step pipeline managed by CIME. Data flows in (atmospheric forcing, surface parameters) and out (history files with model predictions).</p>
+
+<div class="workflow">
+  <div class="wf-step">
+    <div class="step-num">1</div>
+    <div class="step-name">create_newcase</div>
+    <div class="step-desc">Choose a NEON site, compset, and resolution. CIME creates a case directory with default configuration.</div>
+  </div>
+  <div class="wf-arrow">&rarr;</div>
+  <div class="wf-step">
+    <div class="step-num">2</div>
+    <div class="step-name">case.setup</div>
+    <div class="step-desc">Apply site usermods. Generate namelists (what CLM parameters to use) and build scripts.</div>
+  </div>
+  <div class="wf-arrow">&rarr;</div>
+  <div class="wf-step">
+    <div class="step-num">3</div>
+    <div class="step-name">case.build</div>
+    <div class="step-desc">Compile CLM from Fortran source for this specific configuration. ~2 min. Produces cesm.exe.</div>
+  </div>
+  <div class="wf-arrow">&rarr;</div>
+  <div class="wf-step">
+    <div class="step-num">4</div>
+    <div class="step-name">case.submit</div>
+    <div class="step-desc">Download input data (if needed), then execute the model. Minutes to hours depending on run length.</div>
+  </div>
+</div>
+
+<div class="wf-io-row">
+  <div class="wf-input">
+    <strong>Input data (flows in)</strong>
+    <ul style="font-size: 0.82rem; margin-top: 0.3rem; padding-left: 1rem;">
+      <li><strong>Surface datasets</strong> -- soil texture, topography, vegetation type, land use for the grid cell</li>
+      <li><strong>Atmospheric forcing</strong> -- gap-filled NEON tower observations: temperature, humidity, precipitation, wind, radiation</li>
+      <li><strong>Parameter files</strong> -- CLM physics parameters (plant functional types, soil biogeochemistry constants)</li>
+    </ul>
+  </div>
+  <div class="wf-output">
+    <strong>Output data (flows out)</strong>
+    <ul style="font-size: 0.82rem; margin-top: 0.3rem; padding-left: 1rem;">
+      <li><strong>History files</strong> -- NetCDF files with predicted soil temperature, moisture, carbon fluxes, energy balance, etc.</li>
+      <li><strong>Restart files</strong> -- model state snapshots for continuing a run later</li>
+      <li><strong>Log files</strong> -- timing, diagnostics, warnings</li>
+    </ul>
+  </div>
+</div>
+
+<p>The project's <code>run_neon_v2</code> wrapper script automates steps 1-4 in a single command. When you run a notebook cell like <code>run_neon_v2 --neon-sites KONZ --output-root ~/CLM-NEON</code>, it calls CIME's commands internally, applies the KONZ usermods, and manages the build and execution.</p>
+
+<h2>Diagram 3: What Is a "Case"?</h2>
+
+<p>A case is a directory that CIME creates to hold one specific simulation experiment. You create many cases from the same CTSM installation. Each case is independent: its own configuration, its own build, its own output.</p>
+
+<div class="case-diagram">
+  <div class="case-box" style="border-color: var(--uw-blue);">
+    <h4>Case: KONZ.transient</h4>
+    <ul>
+      <li><strong>Site:</strong> Konza Prairie, KS</li>
+      <li><strong>Compset:</strong> I1PtClm60Bgc</li>
+      <li><strong>Period:</strong> 2018-2022</li>
+      <li><code>user_nl_clm</code> -- CLM namelist overrides</li>
+      <li><code>env_run.xml</code> -- run length, restart options</li>
+      <li><code>bld/cesm.exe</code> -- compiled model</li>
+      <li><code>run/</code> -- active simulation directory</li>
+    </ul>
+  </div>
+  <div class="case-box" style="border-color: var(--uw-green);">
+    <h4>Case: HARV.transient</h4>
+    <ul>
+      <li><strong>Site:</strong> Harvard Forest, MA</li>
+      <li><strong>Compset:</strong> I1PtClm60Bgc</li>
+      <li><strong>Period:</strong> 2018-2022</li>
+      <li><code>user_nl_clm</code> -- different site params</li>
+      <li><code>env_run.xml</code> -- same run length</li>
+      <li><code>bld/cesm.exe</code> -- same compiled model</li>
+      <li><code>run/</code> -- different forcing data</li>
+    </ul>
+  </div>
+  <div class="case-box" style="border-color: #e67e22;">
+    <h4>Case: KONZ.precip_plus10</h4>
+    <ul>
+      <li><strong>Site:</strong> Konza Prairie, KS</li>
+      <li><strong>Compset:</strong> I1PtClm60Bgc</li>
+      <li><strong>Period:</strong> 2018-2022</li>
+      <li><strong>Perturbation:</strong> precip +10%</li>
+      <li><code>user_nl_clm</code> -- same as KONZ base</li>
+      <li><code>env_run.xml</code> -- same run length</li>
+      <li>Uses transformed forcing data</li>
+    </ul>
+  </div>
+</div>
+
+<p>All three cases use the same CTSM installation, the same CLM physics code, and the same Python analysis tools. They differ in which site they simulate, what forcing data they use, and what parameter modifications they apply. This is how the project's perturbation experiments work: run a control case and a perturbed case at the same site, then compare the output.</p>
+
+<h2>How the Analysis Pipeline Connects</h2>
+
+<p>After a simulation produces history files, the Python analysis stack takes over:</p>
+
+<table>
+  <tr><th>Step</th><th>Tool</th><th>What it does</th></tr>
+  <tr><td>Load output</td><td>xarray</td><td>Opens NetCDF history files as labeled multi-dimensional arrays</td></tr>
+  <tr><td>Compute diagnostics</td><td>numpy, scipy, pandas</td><td>Soil temperature profiles, carbon flux time series, water balance closure</td></tr>
+  <tr><td>Compare to observations</td><td>analytics_modules</td><td>Model-data misfit statistics (RMSE, bias, correlation) against NEON tower measurements</td></tr>
+  <tr><td>Calibrate</td><td>analytics_modules</td><td>Kalman filter adjustment of simulated values toward observations</td></tr>
+  <tr><td>Visualize</td><td>matplotlib, cartopy</td><td>Time series plots, soil profile contours, map projections</td></tr>
+</table>
+
+<p>This pipeline is what the project's notebooks implement. The <strong>Data_Hub</strong> focuses on data loading and visualization. The <strong>Modeling_Hub</strong> focuses on misfit evaluation and calibration. The <strong>Design_Hub</strong> focuses on running perturbation experiments and comparing control vs. modified scenarios.</p>
+
+</body>
+</html>
