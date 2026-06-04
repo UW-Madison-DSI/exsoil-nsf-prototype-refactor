@@ -13,21 +13,19 @@ try.
 When you tell CLM "run a simulation at the Konza Prairie NEON site
 for the years 2018-2021," it needs several kinds of input data:
 
-**Things that describe the site:**
-- What kind of soil is there (clay, sand, loam)
-- What vegetation grows there (tallgrass prairie)
-- The topography and land use history
+**Surface data files (surfdata):**
+- Soil properties (clay, sand, loam fractions), vegetation type
+  (PFTs), topography, and land use history for the grid cell
 
-**Things that describe the weather:**
+**Atmospheric forcing data (DATM inputs):**
 - Temperature, humidity, wind speed, precipitation, and solar
-  radiation for every time step of the simulation
-- These come from the NEON tower's own instruments
+  radiation for every time step of the simulation, typically from
+  the NEON tower's own gap-filled observations
 
-**Things that describe the global background:**
-- How much nitrogen falls from the atmosphere onto the soil
-- What aerosol particles are in the air (affects radiation)
-- Ozone concentrations (affects plant biology)
-- Population density (affects the fire model)
+**Global forcing and boundary data:**
+- Nitrogen deposition (ndep), aerosol deposition (presaero),
+  ozone concentrations (preso3), population density (for the fire
+  model), crop calendars, and CO2 concentrations
 
 CLM can't run without all of these. Before a simulation starts,
 a script called `check_input_data` goes through the list and
