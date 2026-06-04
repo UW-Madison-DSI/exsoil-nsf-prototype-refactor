@@ -222,6 +222,34 @@
 
 <p>The trade-off is that CTSM cannot run fully coupled experiments where land surface changes (e.g., deforestation, irrigation) feed back into the atmosphere and alter regional weather patterns. For the current project -- evaluating CLM predictions against tower observations and testing forcing perturbations -- standalone CTSM is the right tool.</p>
 
+<h2>What This Project Does</h2>
+
+<p>The ExSOIL project investigates how well CLM represents soil
+processes at real-world sites. The core workflow is:</p>
+
+<ol style="margin: 0.75rem 0; padding-left: 1.5rem; font-size: 0.95rem;">
+  <li><strong>Run CLM at a NEON tower site</strong> using observed
+    atmospheric forcing data from the tower instruments (temperature,
+    precipitation, humidity, wind, radiation).</li>
+  <li><strong>Compare CLM's predictions</strong> (soil temperature,
+    soil moisture, carbon fluxes) against what the tower actually
+    measured.</li>
+  <li><strong>Evaluate model-data misfit</strong> using statistical
+    diagnostics (bias, RMSE, residual distributions) to quantify
+    where and how much CLM diverges from observations.</li>
+  <li><strong>Calibrate and test sensitivity</strong> using Kalman
+    filter techniques and forcing perturbation experiments (e.g.,
+    "what happens to soil carbon if precipitation increases by 10%?").</li>
+</ol>
+
+<p>This requires running the same model at many sites, with different
+configurations, and analyzing large volumes of NetCDF output. The
+container packages everything needed for this workflow so researchers
+can focus on the science rather than software installation.</p>
+
+<p>The rest of this document explains what is inside the container and
+how the pieces work together.</p>
+
 <h2>Diagram 1: What Is in the Container</h2>
 
 <p>The container packages three layers of software. The outermost layer is the Docker container itself. Inside it, CTSM provides the model and build system. Alongside CTSM, the Python analysis stack provides tools for working with model output.</p>
