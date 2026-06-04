@@ -179,6 +179,49 @@
 
 <p>This document explains what each piece of software in the container does, how they relate to each other, and what happens when you run a simulation at a NEON tower site. It is intended for researchers who understand the science (land surface modeling, NEON tower observations) but want a clearer picture of the software architecture.</p>
 
+<h2>Where CTSM Comes From: The CESM Family Tree</h2>
+
+<p><strong>CESM</strong> (Community Earth System Model) is NCAR's flagship climate model. It couples separate models for the atmosphere (CAM), ocean (POP), sea ice (CICE), ice sheets (CISM), and land surface (CLM) into a single interacting Earth system. In a fully coupled CESM run, the land surface influences the atmosphere, which influences the ocean, which feeds back to the atmosphere and land. This is how researchers study large-scale climate dynamics.</p>
+
+<p><strong>CTSM</strong> (Community Terrestrial Systems Model) extracts just the land surface part -- CLM -- and gives it everything it needs to run on its own, without the atmosphere, ocean, or ice models. Instead of a simulated atmosphere, CTSM feeds CLM observed weather data (from NEON towers or reanalysis products) through a component called DATM (data atmosphere). This is much cheaper computationally and is the right tool when the research question is about the land surface itself, not about atmosphere-land-ocean interactions.</p>
+
+<div style="margin: 1.5rem 0; padding: 1rem; background: var(--uw-light); border-radius: 8px; border: 1px solid #ddd; font-size: 0.9rem;">
+
+<div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+  <div style="flex: 1; min-width: 250px;">
+    <div style="font-weight: 700; margin-bottom: 0.5rem; color: var(--uw-gray);">Full CESM (coupled)</div>
+    <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+      <div style="padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; border: 1px solid #aaa; background: #fff;">CAM (atmosphere)</div>
+      <div style="padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; border: 1px solid #aaa; background: #fff;">POP (ocean)</div>
+      <div style="padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; border: 1px solid #aaa; background: #fff;">CICE (sea ice)</div>
+      <div style="padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; border: 1px solid #aaa; background: #fff;">CISM (ice sheets)</div>
+      <div style="padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; border: 2px solid var(--uw-green); background: #f0f8f0; font-weight: 600;">CLM (land)</div>
+      <div style="padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; border: 1px solid #aaa; background: #fff;">MOSART (rivers)</div>
+      <div style="padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; border: 1px solid var(--uw-blue); background: #f0f5fa;">CIME (infrastructure)</div>
+    </div>
+    <div style="font-size: 0.78rem; color: var(--uw-gray); margin-top: 0.4rem;">All components interact through a coupler. Land changes affect the atmosphere. Used for global climate projections.</div>
+  </div>
+
+  <div style="display: flex; align-items: center; font-size: 1.5rem; color: var(--uw-gray); padding: 0 0.5rem;">&rarr;</div>
+
+  <div style="flex: 1; min-width: 250px;">
+    <div style="font-weight: 700; margin-bottom: 0.5rem; color: var(--uw-red);">CTSM (standalone land)</div>
+    <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+      <div style="padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; border: 2px solid var(--uw-green); background: #f0f8f0; font-weight: 600;">CLM (land)</div>
+      <div style="padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; border: 2px solid #9b59b6; background: #faf0ff;">DATM (data atmosphere)</div>
+      <div style="padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; border: 1px solid #aaa; background: #fff;">MOSART (rivers)</div>
+      <div style="padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; border: 1px solid var(--uw-blue); background: #f0f5fa;">CIME (infrastructure)</div>
+    </div>
+    <div style="font-size: 0.78rem; color: var(--uw-gray); margin-top: 0.4rem;">CLM receives prescribed weather from observed data instead of a simulated atmosphere. Used for land-focused research including NEON tower site experiments. <strong>This is what the container uses.</strong></div>
+  </div>
+</div>
+
+</div>
+
+<p>The NEON tower workflow was developed specifically for CTSM. It is not available in standard CESM releases (it will arrive when CESM 3.x ships, which is still in beta). This is why the container uses CTSM rather than CESM: it is NCAR's intended platform for running CLM at NEON sites.</p>
+
+<p>The trade-off is that CTSM cannot run fully coupled experiments where land surface changes (e.g., deforestation, irrigation) feed back into the atmosphere and alter regional weather patterns. For the current project -- evaluating CLM predictions against tower observations and testing forcing perturbations -- standalone CTSM is the right tool.</p>
+
 <h2>Diagram 1: What Is in the Container</h2>
 
 <p>The container packages three layers of software. The outermost layer is the Docker container itself. Inside it, CTSM provides the model and build system. Alongside CTSM, the Python analysis stack provides tools for working with model output.</p>
