@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CESM / CTSM Version Lineage</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #282728;
+    margin: 0;
+    padding: 1.5rem;
+    background: #fff;
+  }
+  h1 { font-size: 1.4rem; border-bottom: 3px solid #c5050c; padding-bottom: 0.4rem; margin-bottom: 0.3rem; }
+  .subtitle { color: #646569; font-size: 0.85rem; margin-bottom: 1.5rem; }
+  .chart-container { overflow-x: auto; }
+  svg { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .legend { margin-top: 1rem; font-size: 0.8rem; color: #646569; }
+  .legend span { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .note { margin-top: 1.5rem; font-size: 0.82rem; color: #646569; border-top: 1px solid #ddd; padding-top: 0.75rem; max-width: 900px; }
+  @media print {
+    .chart-container { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>CESM / CTSM Component Version Lineage</h1>
+<div class="subtitle">How the components, versions, and releases connect over time</div>
+
+<div class="chart-container">
+<svg width="1100" height="620" viewBox="0 0 1100 620">
+
+  <!-- Time axis -->
+  <line x1="180" y1="570" x2="1060" y2="570" stroke="#ccc" stroke-width="1"/>
+  <text x="180" y="595" font-size="10" fill="#646569">2020</text>
+  <text x="326" y="595" font-size="10" fill="#646569">2021</text>
+  <text x="472" y="595" font-size="10" fill="#646569">2022</text>
+  <text x="618" y="595" font-size="10" fill="#646569">2023</text>
+  <text x="764" y="595" font-size="10" fill="#646569">2024</text>
+  <text x="910" y="595" font-size="10" fill="#646569">2025</text>
+  <text x="1030" y="595" font-size="10" fill="#646569">2026</text>
+  <!-- Tick marks -->
+  <line x1="180" y1="567" x2="180" y2="573" stroke="#ccc"/>
+  <line x1="326" y1="567" x2="326" y2="573" stroke="#ccc"/>
+  <line x1="472" y1="567" x2="472" y2="573" stroke="#ccc"/>
+  <line x1="618" y1="567" x2="618" y2="573" stroke="#ccc"/>
+  <line x1="764" y1="567" x2="764" y2="573" stroke="#ccc"/>
+  <line x1="910" y1="567" x2="910" y2="573" stroke="#ccc"/>
+  <line x1="1056" y1="567" x2="1056" y2="573" stroke="#ccc"/>
+
+  <!-- Row labels (left side) -->
+  <text x="0" y="60" font-size="12" font-weight="700" fill="#282728">CESM</text>
+  <text x="0" y="74" font-size="9" fill="#646569">Full Earth system</text>
+
+  <text x="0" y="140" font-size="12" font-weight="700" fill="#c5050c">CTSM</text>
+  <text x="0" y="154" font-size="9" fill="#646569">Standalone land</text>
+
+  <text x="0" y="220" font-size="12" font-weight="700" fill="#3d7a38">CLM</text>
+  <text x="0" y="234" font-size="9" fill="#646569">Land model code</text>
+
+  <text x="0" y="300" font-size="12" font-weight="700" fill="#0479a8">CIME</text>
+  <text x="0" y="314" font-size="9" fill="#646569">Build/run system</text>
+
+  <text x="0" y="380" font-size="12" font-weight="700" fill="#9b59b6">NEON</text>
+  <text x="0" y="394" font-size="9" fill="#646569">Tower workflow</text>
+
+  <text x="0" y="460" font-size="12" font-weight="700" fill="#e67e22">Docker</text>
+  <text x="0" y="474" font-size="9" fill="#646569">Container images</text>
+
+  <text x="0" y="540" font-size="12" font-weight="700" fill="#282728">Data</text>
+  <text x="0" y="554" font-size="9" fill="#646569">Input datasets</text>
+
+  <!-- Horizontal swim lanes (faint) -->
+  <line x1="170" y1="95" x2="1070" y2="95" stroke="#f0f0f0" stroke-width="1"/>
+  <line x1="170" y1="175" x2="1070" y2="175" stroke="#f0f0f0" stroke-width="1"/>
+  <line x1="170" y1="255" x2="1070" y2="255" stroke="#f0f0f0" stroke-width="1"/>
+  <line x1="170" y1="335" x2="1070" y2="335" stroke="#f0f0f0" stroke-width="1"/>
+  <line x1="170" y1="415" x2="1070" y2="415" stroke="#f0f0f0" stroke-width="1"/>
+  <line x1="170" y1="495" x2="1070" y2="495" stroke="#f0f0f0" stroke-width="1"/>
+
+  <!-- === CESM row === -->
+  <!-- CESM 2.2.0 -->
+  <circle cx="210" cy="60" r="6" fill="#282728"/>
+  <text x="220" y="55" font-size="9" fill="#282728">2.2.0</text>
+  <!-- CESM 2.2.2 -->
+  <circle cx="380" cy="60" r="6" fill="#282728"/>
+  <text x="390" y="55" font-size="9" fill="#282728">2.2.2</text>
+  <!-- CESM 3.x betas -->
+  <circle cx="800" cy="60" r="5" fill="none" stroke="#282728" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <text x="810" y="55" font-size="9" fill="#646569">3.0 beta03</text>
+  <circle cx="870" cy="60" r="5" fill="none" stroke="#282728" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <text x="880" y="55" font-size="9" fill="#646569">beta06</text>
+  <circle cx="990" cy="60" r="5" fill="none" stroke="#282728" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <text x="1000" y="55" font-size="9" fill="#646569">beta08</text>
+  <!-- CESM line -->
+  <line x1="210" y1="60" x2="380" y2="60" stroke="#282728" stroke-width="2"/>
+  <line x1="800" y1="60" x2="990" y2="60" stroke="#282728" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+  <!-- === CTSM row === -->
+  <!-- ctsm5.1.dev -->
+  <circle cx="500" cy="140" r="5" fill="#c5050c" opacity="0.5"/>
+  <text x="510" y="135" font-size="8" fill="#646569">5.1.dev114</text>
+  <!-- ctsm5.2.005 -->
+  <circle cx="790" cy="140" r="6" fill="#c5050c"/>
+  <text x="800" y="135" font-size="9" fill="#c5050c">5.2.005</text>
+  <!-- ctsm5.3.021 -->
+  <circle cx="870" cy="140" r="6" fill="#c5050c"/>
+  <text x="880" y="135" font-size="9" fill="#c5050c">5.3.021</text>
+  <!-- ctsm5.4.002 -->
+  <circle cx="940" cy="140" r="8" fill="#c5050c" stroke="#c5050c" stroke-width="2"/>
+  <text x="955" y="135" font-size="10" font-weight="700" fill="#c5050c">5.4.002</text>
+  <!-- CTSM line -->
+  <line x1="500" y1="140" x2="940" y2="140" stroke="#c5050c" stroke-width="2"/>
+
+  <!-- === CLM row === -->
+  <!-- clm5.0 (release line) -->
+  <circle cx="210" cy="220" r="5" fill="#3d7a38"/>
+  <text x="220" y="215" font-size="8" fill="#3d7a38">clm5.0</text>
+  <circle cx="740" cy="220" r="5" fill="#3d7a38"/>
+  <text x="750" y="215" font-size="8" fill="#646569">clm5.0.37</text>
+  <line x1="210" y1="220" x2="740" y2="220" stroke="#3d7a38" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="400" y="240" font-size="8" fill="#646569" font-style="italic">maintenance only, no NEON</text>
+  <!-- clm5.1 / clm6.0 (dev line) -->
+  <circle cx="360" cy="250" r="5" fill="#3d7a38"/>
+  <text x="370" y="248" font-size="8" fill="#3d7a38">clm5.1 (dev)</text>
+  <circle cx="940" cy="250" r="6" fill="#3d7a38"/>
+  <text x="955" y="248" font-size="9" fill="#3d7a38">clm6.0</text>
+  <line x1="360" y1="250" x2="940" y2="250" stroke="#3d7a38" stroke-width="2"/>
+
+  <!-- === CIME row === -->
+  <circle cx="210" cy="300" r="5" fill="#0479a8"/>
+  <text x="220" y="295" font-size="8" fill="#0479a8">cime5.x</text>
+  <circle cx="790" cy="300" r="5" fill="#0479a8"/>
+  <text x="800" y="295" font-size="8" fill="#0479a8">cime6.0</text>
+  <circle cx="940" cy="300" r="6" fill="#0479a8"/>
+  <text x="955" y="295" font-size="9" fill="#0479a8">cime6.1</text>
+  <line x1="210" y1="300" x2="940" y2="300" stroke="#0479a8" stroke-width="1.5"/>
+  <text x="500" y="320" font-size="8" fill="#646569">cime5.x uses import imp (Python &lt;3.12 only)</text>
+  <text x="810" y="320" font-size="8" fill="#0479a8">Python 3.12+ OK</text>
+
+  <!-- === NEON row === -->
+  <!-- PR #1278 -->
+  <circle cx="350" cy="380" r="5" fill="#9b59b6"/>
+  <text x="360" y="375" font-size="8" fill="#9b59b6">PR #1278</text>
+  <text x="360" y="390" font-size="7" fill="#646569">NEON usermods added</text>
+  <!-- Active dev -->
+  <line x1="350" y1="380" x2="940" y2="380" stroke="#9b59b6" stroke-width="2"/>
+  <text x="550" y="400" font-size="8" fill="#646569">Active NEON development (usermods, surface datasets, run_tower)</text>
+  <!-- 48 sites -->
+  <circle cx="940" cy="380" r="6" fill="#9b59b6"/>
+  <text x="955" y="378" font-size="9" fill="#9b59b6">48 sites</text>
+
+  <!-- === Docker row === -->
+  <!-- escomp/cesm-lab-neon -->
+  <circle cx="485" cy="460" r="6" fill="#e67e22"/>
+  <text x="498" y="455" font-size="8" fill="#e67e22">escomp/cesm-lab-neon</text>
+  <text x="498" y="468" font-size="7" fill="#646569">Custom build (amd64 only)</text>
+  <!-- Our container -->
+  <circle cx="1050" cy="460" r="8" fill="#e67e22" stroke="#e67e22" stroke-width="2"/>
+  <text x="965" y="448" font-size="9" font-weight="700" fill="#e67e22">ExSOIL container</text>
+  <text x="965" y="461" font-size="8" fill="#646569">CTSM 5.4, arm64+amd64</text>
+  <text x="965" y="474" font-size="8" fill="#646569">Python 3.13, 90 tests</text>
+
+  <!-- === Data row === -->
+  <line x1="180" y1="540" x2="780" y2="540" stroke="#888" stroke-width="2"/>
+  <text x="400" y="557" font-size="9" fill="#282728">CMIP6 data (available on public servers)</text>
+  <line x1="850" y1="540" x2="940" y2="540" stroke="#888" stroke-width="2" stroke-dasharray="4,3"/>
+  <text x="850" y="557" font-size="9" fill="#c5050c">CMIP7 data (partial, not all published)</text>
+
+  <!-- === Connection lines (composition) === -->
+
+  <!-- CESM 2.2 contains clm5.0 -->
+  <line x1="210" y1="66" x2="210" y2="214" stroke="#aaa" stroke-width="1" stroke-dasharray="3,2"/>
+
+  <!-- CTSM 5.4 contains clm6.0 -->
+  <line x1="940" y1="148" x2="940" y2="244" stroke="#c5050c" stroke-width="1.5"/>
+
+  <!-- CTSM 5.4 contains cime6.1 -->
+  <line x1="940" y1="148" x2="940" y2="294" stroke="#0479a8" stroke-width="1"/>
+
+  <!-- CTSM 5.4 contains NEON 48 sites -->
+  <line x1="940" y1="148" x2="940" y2="374" stroke="#9b59b6" stroke-width="1"/>
+
+  <!-- ExSOIL container contains CTSM 5.4 -->
+  <line x1="1050" y1="452" x2="945" y2="148" stroke="#e67e22" stroke-width="1.5"/>
+
+  <!-- escomp container was custom (CESM 2.2 + dev CTSM) -->
+  <line x1="485" y1="454" x2="380" y2="66" stroke="#aaa" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="485" y1="454" x2="450" y2="250" stroke="#aaa" stroke-width="1" stroke-dasharray="3,2"/>
+
+  <!-- NEON not in CESM 2.x (X mark) -->
+  <text x="290" y="112" font-size="18" fill="#c5050c" font-weight="700">x</text>
+  <text x="305" y="115" font-size="7" fill="#c5050c">NEON never in CESM 2.x</text>
+
+  <!-- NEON will be in CESM 3.x -->
+  <line x1="940" y1="386" x2="990" y2="66" stroke="#9b59b6" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="970" y="88" font-size="7" fill="#646569">arrives in 3.x</text>
+
+  <!-- Data availability gap -->
+  <rect x="920" y="525" width="40" height="30" fill="#fde8e8" stroke="#c5050c" stroke-width="1" rx="3"/>
+  <text x="925" y="545" font-size="7" fill="#c5050c">GAP</text>
+
+</svg>
+</div>
+
+<div class="legend">
+  <span style="background:#282728;"></span> CESM (full coupled Earth system)
+  &nbsp;&nbsp;
+  <span style="background:#c5050c;"></span> CTSM (standalone land model)
+  &nbsp;&nbsp;
+  <span style="background:#3d7a38;"></span> CLM (land model code)
+  &nbsp;&nbsp;
+  <span style="background:#0479a8;"></span> CIME (build/run infrastructure)
+  &nbsp;&nbsp;
+  <span style="background:#9b59b6;"></span> NEON (tower site workflow)
+  &nbsp;&nbsp;
+  <span style="background:#e67e22;"></span> Docker (container images)
+  <br>
+  Solid lines = released. Dashed lines = maintenance/beta/partial. Large filled circles = current/key releases.
+  Lines connecting rows show composition (what contains what).
+</div>
+
+<div class="note">
+  <strong>Key takeaways from this diagram:</strong>
+  <ul style="margin-top: 0.3rem; padding-left: 1.2rem;">
+    <li>NEON support (purple) was developed on the CTSM development branch starting Feb 2021, never on the CESM 2.x line.</li>
+    <li>The old <code>escomp/cesm-lab-neon</code> Docker image (2022) was a custom build mixing CESM 2.2 with a dev CTSM branch (dashed lines).</li>
+    <li>CLM has two branches: clm5.0 (maintenance, used by CESM 2.2, no NEON) and clm5.1/6.0 (active development, used by CTSM).</li>
+    <li>CIME upgraded from 5.x (Python &lt;3.12 only) to 6.x (Python 3.12+) between CTSM 5.2 and 5.4.</li>
+    <li>CMIP7 input data (red dashed line at bottom) is only partially published, blocking live simulations with CTSM 5.4.</li>
+    <li>The ExSOIL container uses CTSM 5.4, which includes CLM 6.0, CIME 6.1, and 48 NEON sites natively.</li>
+  </ul>
+</div>
+
+</body>
+</html>
