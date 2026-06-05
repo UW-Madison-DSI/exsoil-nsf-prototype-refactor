@@ -73,7 +73,7 @@ ENV PROJ_DATA="${CONDA_DIR}/share/proj"
 # =============================================================================
 FROM base AS ctsm
 
-ARG CTSM_TAG=ctsm5.4.002
+ARG CTSM_TAG=ctsm5.4.043
 ARG CTSM_ROOT=/opt/ncar/ctsm
 
 # Create user and group
