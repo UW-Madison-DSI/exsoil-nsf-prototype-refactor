@@ -155,6 +155,17 @@ download "lnd/clm2/surfdata_esmf/NEON/ctsm5.4.0/surfdata_1x1_NEON_KONZ_hist_2000
     "$GDEX/lnd/clm2/surfdata_esmf/NEON/ctsm5.4.0/surfdata_1x1_NEON_KONZ_hist_2000_78pfts_c251023.no_nan_fill.nc"
 
 echo ""
+echo "--- NEON tower forcing data (KONZ, from neonscience.org) ---"
+NEON="https://storage.neonscience.org/neon-ncar/NEON"
+SITE="${NEON_SITE:-KONZ}"
+for year in 2018 2019 2020 2021 2022 2023 2024; do
+    for month in 01 02 03 04 05 06 07 08 09 10 11 12; do
+        download "atm/cdeps/v4/${SITE}/${SITE}_atm_${year}-${month}.nc" \
+            "$NEON/atm/cdeps/v4/${SITE}/${SITE}_atm_${year}-${month}.nc"
+    done
+done
+
+echo ""
 echo "========================================="
 echo "  Downloaded: $PASS"
 echo "  Skipped:    $SKIP"
