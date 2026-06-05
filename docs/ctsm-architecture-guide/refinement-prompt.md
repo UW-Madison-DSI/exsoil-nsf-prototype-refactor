@@ -29,32 +29,51 @@ work flows into CESM 3.x). Add a dashed connection line from the CTSM
 lane up into CESM 3.x, labeled "CTSM work incorporated into CESM 3.x"
 or similar. This is the convergence point where the two bands reconnect.
 
-## 4. Connect the data gap to ExSOIL with a concrete label
+## 4. Update the data lane (revised)
 
-The "NOT PUBLISHED" CMIP7 marker should have a line or annotation
-connecting it to the ExSOIL container with the label "blocks live
-simulations" or "input data not on public servers." Make the
-consequence explicit.
+The data situation has been resolved through investigation. Replace the
+previous "NOT PUBLISHED" framing with an accurate picture of the data
+infrastructure.
 
-## 5. Add CMIP data evolution
+The data lane should show three things:
 
-Add a data lane at the bottom showing two bars:
+**Data servers (infrastructure migration):**
+- Old servers (FTP, SVN): solid bar through ~2025, label "CMIP6 data,
+  used by CESM 2.2.x and earlier CTSM"
+- New server (NCAR GDEX): starts ~2025, label "CMIP7 data + migrated
+  CMIP6, used by CTSM 5.4.043+"
+- Show the transition: ctsm5.4.002 still pointed at old servers,
+  ctsm5.4.043 updated to new GDEX server
 
-**CMIP6:** Solid green bar spanning the full width. Label: "Fully
-published. All servers." Draw thin connection arrows up to CESM 2.2.x
-and CTSM 5.2 (these use CMIP6 data). Note: "CMIP6 SSP data available
-(covers 2015-2100)."
+**NEON tower observations (from storage.neonscience.org):**
+- Small, fast: 150 KB/month per site, 84 months (2018-2024)
+- All 48 sites through Dec 2024
+- Served from Google Cloud, downloads in seconds
 
-**CMIP7:** Bar starting around 2025. Split into two segments:
-- Left segment (solid): "Historical (1850-2023). Published."
-- Right segment (red dashed): "SSP/future. NOT YET PRODUCED."
-Draw connection arrow up to CTSM 5.4 with annotation: "CTSM 5.4
-defaults to CMIP7, but NEON runs need SSP-era data (2018+) which
-CMIP7 hasn't produced."
+**Practical note:** Global input data (~6 GB) is static per CTSM
+version, downloaded once and cached. NEON tower data (~12 MB per site)
+is trivial. The bottleneck was GDEX CDN reliability, not missing data.
 
-This explains the blocker: NEON simulations cover 2018-2021, which
-falls after the historical period ends (~2014), so they need SSP
-forcing data. CMIP6 has it. CMIP7 doesn't, yet.
+## 5. Components flow UP into integration products
+
+CLM, CIME, and NEON are components that get assembled into integration
+products (CTSM releases, CESM releases). Docker containers build on
+top of those integration products. The flow is:
+
+```
+Components:     CLM 6.0 ──┐
+                CIME 6.1 ──┼──> CTSM 5.4.002 ──> ExSOIL Container
+                NEON 48  ──┘
+
+                CLM clm5.0 ──┐
+                CIME 5.x   ──┼──> CESM 2.2.x ──> escomp/cesm-lab-neon
+                CAM, POP...──┘         (+ custom CTSM graft)
+```
+
+Connection lines from CLM, CIME, and NEON lanes should go UP into the
+CTSM and CESM release nodes. The ExSOIL container should NOT have
+separate connection lines down to CLM or CIME. It inherits them
+through CTSM 5.4.
 
 ## 6. Slightly expand ctsm5.2 component list if space allows
 
