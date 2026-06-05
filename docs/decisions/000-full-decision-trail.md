@@ -224,20 +224,82 @@ intended behavior; the auto-detection just doesn't cover the NEON case.
 
 ---
 
+## 10. CLM_CMIP_ERA fix: insufficient
+
+**What we tried:** Set `CLM_CMIP_ERA=cmip6` explicitly in
+`run_neon_v2.py`. The release notes said SSP-period data should use
+CMIP6.
+
+**What happened:** The fix didn't change which files the namelist
+generator requested. The same files were missing. The problem was
+broader than the CMIP era flag: many missing files (parameter files,
+snow optics, crop calendars) are not era-dependent at all.
+
+**Reference:** [ADR-0006 test results](../adr/0006-cmip-era-override-for-neon.md)
+
+---
+
+## 11. NCAR data server migration discovery
+
+**What we found:** Comparing ctsm5.4.002 to ctsm5.4.043 (the latest
+development tag, 41 point releases later), the `config_inputdata.xml`
+was updated to use NCAR's new GDEX server
+(`osdf-data.gdex.ucar.edu`) instead of the old FTP/SVN servers. Many
+filenames also changed (`.no_nan_fill` suffixes, new timestamps).
+
+**The data existed all along.** NCAR migrated their data
+infrastructure between the 5.4.002 release and the current
+development branch. The 5.4.002 release shipped before the config
+files were updated to point at the new server.
+
+**Reference:** [resolution doc](decisions/003-neon-input-data-resolution/resolution.md)
+
+---
+
+## 12. Iterative pre-download to resolve all input data
+
+**What we did:** Built a container with ctsm5.4.043, which uses the
+new GDEX server. CIME's automatic download got most files but failed
+intermittently on some due to the GDEX CDN redirect chain (3-hop:
+GDEX -> OSDF director -> CDN cache). We identified the specific files
+that failed and manually pre-downloaded them using the best available
+server for each (GDEX with retries, SVN, or FTP).
+
+**Results across three rounds:**
+- Round 1: 10 files identified and pre-downloaded (10/10 succeeded)
+- Round 2: 9 additional files discovered and pre-downloaded (9/9 succeeded)
+- Round 3: All global input data resolved. Remaining gap is NEON
+  tower forcing data for KONZ past April 2023 (NEON hasn't published
+  more recent observations).
+
+**Key finding:** The data availability issue was never about missing
+data. It was a combination of: (1) stale server configuration in the
+release tag, (2) unreliable CDN downloads from NCAR's new GDEX server,
+and (3) CIME's download logic not retrying aggressively enough. All
+files exist on at least one public server.
+
+---
+
 ## Current state
 
 **What works:**
 - Multi-arch container (amd64 + arm64) on Ubuntu 24.04
-- CTSM 5.4 with 48 NEON tower sites
+- CTSM 5.4.043 with 48 NEON tower sites
 - Python 3.13, conda-forge scientific stack
-- 90/90 test suite passing (imports, compilers, case creation, Fortran build, analysis workflows)
+- 90/90 test suite passing
+- All global input data downloadable (19 files verified across GDEX, SVN, FTP)
+- NEON case creation and setup through case.build
 - JupyterLab with project notebooks
 - Getting Started notebook (no credentials needed)
 
-**What is blocked:**
-- Running a live CTSM simulation (proposed fix: `CLM_CMIP_ERA=cmip6`, not yet tested)
-- Modeling_Hub notebook (needs either simulation output or NCAR's pre-computed data)
+**What needs work:**
+- A robust pre-download script to handle the unreliable GDEX CDN
+  (retries + server fallback) so users don't hit download failures
+- Run period needs to be limited to available NEON tower data
+  (~2018-2023 for KONZ; varies by site)
+- Modeling_Hub notebook needs either live simulation output or
+  connection to NCAR's pre-computed data
 
-**Next step:** Test the `CLM_CMIP_ERA=cmip6` fix. If it resolves the
-data download, the full simulation pipeline becomes functional and the
-Modeling_Hub notebook can run end-to-end.
+**Next steps:** Write the pre-download script, run a complete
+simulation end-to-end, evaluate caching options for workshop/classroom
+use. See [ROADMAP.md](../ROADMAP.md).
