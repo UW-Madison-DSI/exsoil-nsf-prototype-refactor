@@ -14,6 +14,12 @@ days compiling libraries, configuring compilers, and debugging Fortran
 dependency chains, you spend your time on the science: designing
 experiments, running simulations, and interpreting results.
 
+![Version Lineage](ctsm-architecture-guide/lineage-chart.png)
+
+The container is built on CTSM 5.4.002. For a detailed guide to how
+all the components fit together, see the
+[architecture guide](ctsm-architecture-guide/ctsm-architecture-guide.html).
+
 ## What is inside
 
 ### CTSM 5.4 with NEON usermods

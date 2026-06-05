@@ -12,8 +12,23 @@ workflow), a full Fortran build toolchain, and a Python analysis stack
 (xarray, cartopy, matplotlib, JupyterLab) into a single image that
 runs natively on both Intel/AMD and Apple Silicon machines.
 
-For a visual guide to how these pieces fit together, see
+## How the pieces fit together
+
+![Version Lineage](docs/ctsm-architecture-guide/lineage-chart.png)
+
+The ExSOIL container is built on **CTSM 5.4.002**, NCAR's standalone
+land modeling framework. CTSM assembles CLM 6.0 (the land model code),
+CIME 6.1 (the build and case management system), and the NEON tower
+workflow (48 site configurations) into a single release. Our container
+adds the arm64/amd64 multi-platform build, a conda-forge Python
+analysis stack, and project-specific notebooks and analysis tools on
+top.
+
+For a detailed guide to the software architecture, see
 [docs/ctsm-architecture-guide](docs/ctsm-architecture-guide/).
+For the full decision trail from the initial ARM64 problem through
+the CTSM migration, see
+[docs/decisions/000-full-decision-trail.md](docs/decisions/000-full-decision-trail.md).
 
 ## Quick start
 

@@ -182,6 +182,14 @@
 
 <p>This document explains what each piece of software in the container does, how they relate to each other, and what happens when you run a simulation at a NEON tower site. It is intended for researchers who understand the science (land surface modeling, NEON tower observations) but want a clearer picture of the software architecture.</p>
 
+<h2>Version Lineage</h2>
+
+<p>The following diagram shows how CESM, CTSM, and their components relate over time, and where the ExSOIL container fits in. The ExSOIL container is built on CTSM 5.4.002, which assembles CLM 6.0, CIME 6.1, and the NEON tower workflow. The diagram also shows the CMIP data availability gap that currently blocks live simulations.</p>
+
+<div style="margin: 1.5rem 0; text-align: center;">
+  <img src="lineage-chart.png" alt="CESM/CTSM Version Lineage" style="max-width: 100%; border: 1px solid #ddd; border-radius: 6px;"/>
+</div>
+
 <h2>Where CTSM Comes From: The CESM Family Tree</h2>
 
 <p><strong>CESM</strong> (Community Earth System Model) is NCAR's flagship climate model. It couples separate models for the atmosphere (CAM), ocean (POP), sea ice (CICE), ice sheets (CISM), and land surface (CLM) into a single interacting Earth system. In a fully coupled CESM run, the land surface influences the atmosphere, which influences the ocean, which feeds back to the atmosphere and land. This is how researchers study large-scale climate dynamics.</p>

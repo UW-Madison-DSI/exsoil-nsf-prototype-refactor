@@ -22,6 +22,11 @@ container, launch JupyterLab, and work with model simulations and
 observational data without installing or configuring any of the
 underlying software.
 
+The diagram below shows how the components, releases, and container
+relate over time:
+
+![Version Lineage](../ctsm-architecture-guide/lineage-chart.png)
+
 This reporting period focused on two infrastructure objectives:
 
 1. **Multi-platform support.** The existing container only ran on
