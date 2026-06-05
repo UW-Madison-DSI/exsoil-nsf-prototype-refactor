@@ -64,6 +64,30 @@ not yet on public servers." This is the single remaining blocker.
   the future convergence point where CTSM's NEON work enters the
   full Earth system model.
 
+## Priority 5: Components flow UP into integration products
+
+The inheritance direction matters. CLM, CIME, and NEON are components
+that get assembled into integration products (CTSM releases, CESM
+releases). Docker containers build on top of those integration
+products. The flow is:
+
+```
+Components:     CLM 6.0 ──┐
+                CIME 6.1 ──┼──> CTSM 5.4.002 ──> ExSOIL Container
+                NEON 48  ──┘
+
+                CLM clm5.0 ──┐
+                CIME 5.x   ──┼──> CESM 2.2.x ──> escomp/cesm-lab-neon
+                CAM, POP...──┘         (+ custom CTSM graft)
+```
+
+Connection lines from the CLM, CIME, and NEON lanes should go UP
+into the CTSM and CESM release nodes. The ExSOIL container should
+NOT have separate connection lines down to CLM or CIME. It inherits
+them through CTSM 5.4. This makes the assembly relationship clear:
+components are composed into releases, releases are packaged into
+containers.
+
 ## What the revised diagram should make immediately obvious
 
 A reader glancing at this diagram should understand in 5 seconds:
