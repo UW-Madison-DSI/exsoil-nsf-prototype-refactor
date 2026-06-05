@@ -119,21 +119,46 @@ mode with observed atmospheric forcing. If coupled experiments are
 needed in the future, a separate CESM 3.x container can be maintained
 alongside the CTSM container.
 
+### Input data resolution
+
+The initial CTSM 5.4.002 release referenced input data files that
+could not be downloaded from NCAR's public servers. Investigation
+revealed that NCAR migrated their data infrastructure between the
+5.4.002 release (December 2025) and the current development branch.
+The data exists on NCAR's new GDEX server
+(`osdf-data.gdex.ucar.edu`) but the 5.4.002 release shipped before
+the configuration files were updated to point at the new server.
+
+Upgrading to CTSM 5.4.043 (the current development tag) resolved
+the server configuration. A pre-download script was developed to
+handle remaining reliability issues with the GDEX CDN (a 3-hop
+redirect chain that intermittently fails). The script downloads all
+required input data (~6 GB of global data plus ~12 MB of NEON tower
+forcing per site) with retries and server fallback, achieving 100%
+success rate across 105 files.
+
+The global input data is static per CTSM version and only needs to
+be downloaded once. The NEON tower forcing data (150 KB/month per
+site, available for 48 sites through December 2024) downloads in
+seconds from Google Cloud Storage. Both categories are suitable for
+caching on university infrastructure.
+
 ### Documentation
 
-The rebuild and migration are documented through:
+The rebuild, migration, and data resolution are documented through:
 
-- **5 Architecture Decision Records** that capture the rationale for
-  each major technical choice (base image selection, build strategy,
-  dependency management, distributed computing support, and the CTSM
-  migration)
-- **A decision brief** analyzing five options for restoring NEON
-  support, including a version lineage diagram and CESM 3.x timeline
-  research
-- **A technical rebuild report** covering the full implementation
-  detail for platform engineering review
+- **6 Architecture Decision Records** covering base image, build
+  strategy, dependency management, distributed computing, CTSM
+  migration, and CMIP era configuration
+- **3 decision briefs** analyzing NEON compatibility options, CTSM
+  version selection, and input data resolution (with a 12-step
+  investigation trail)
+- **A CTSM architecture guide** with diagrams explaining how CESM,
+  CTSM, CLM, CIME, and NEON relate
+- **A version lineage chart** showing component versions, releases,
+  and data infrastructure across time
+- **A technical rebuild report** for platform engineering review
 - **A getting-started guide and introductory notebook** for new users
-  joining the project
 - **A roadmap** tracking completed work and planned next steps
 - **A changelog** summarizing all additions, changes, and removals
 
@@ -149,32 +174,34 @@ exposed the issue, which led to the architectural decision to move
 to standalone CTSM.
 
 A secondary challenge was achieving Fortran compilation on arm64 with
-modern compiler and library versions. CESM 2.2.2's code (written
-primarily for Intel compilers on x86 HPC systems) required 13 separate
-compatibility fixes to compile with GCC 15 and conda-forge's current
-NetCDF libraries on ARM processors. These fixes were identified
-iteratively through the automated test suite. Many of them became
-unnecessary after the CTSM migration, which uses newer, more
-portable code.
+modern compiler and library versions. CESM 2.2.2's code required 13
+compatibility fixes to compile with GCC 15 and conda-forge's
+NetCDF libraries on ARM processors. Many of these became unnecessary
+after the CTSM migration, which uses newer, more portable code.
+
+A third challenge was resolving input data availability. The CTSM
+5.4.002 release pointed at NCAR's old FTP/SVN data servers, but the
+data for this release was published to their new GDEX server. This
+was not documented in the release notes and was only discovered by
+comparing the release tag to newer development tags. The GDEX CDN
+also proved unreliable (intermittent failures on a 3-hop redirect
+chain), requiring a pre-download script with retries and server
+fallback.
 
 ## Next Steps
 
-1. **NEON simulation pipeline.** The Modeling_Hub notebook, which
-   performs model-data evaluation and Kalman Filter calibration,
-   requires CLM history files from a completed transient run and
-   processed NEON tower observations. Building this end-to-end
-   pipeline (data download, simulation execution, observation
-   processing) is the next priority.
+1. **End-to-end simulation validation.** A full KONZ transient
+   simulation (pre-download, case.build, case.submit) is currently
+   in progress. Success here validates the complete pipeline.
 
-2. **CI/CD test integration.** The 90-test validation suite runs
-   locally but is not yet wired into the GitHub Actions workflow.
-   Adding automated testing on both architectures after each push
-   will catch regressions early.
+2. **Data caching strategy.** The ~6 GB of global input data should
+   be cached (on university S3 or bundled in the container) to
+   eliminate the slow download step for subsequent users.
 
-3. **Cross-architecture validation.** All local testing was performed
-   on Apple Silicon (arm64). The Intel/AMD (amd64) image builds in CI
-   but has not been validated through the test suite.
+3. **CI/CD test integration.** Wire the 90-test validation suite
+   into the GitHub Actions workflow for automated testing on both
+   architectures.
 
-4. **Science notebook validation.** The Data_Hub and Design_Hub
-   notebooks need end-to-end testing with S3 credentials on the new
-   CTSM container to verify the full analysis workflow.
+4. **Science notebook validation.** Connect the Modeling_Hub notebook
+   to simulation output for model-data evaluation and calibration.
+   Test Design_Hub and Data_Hub workflows end-to-end.

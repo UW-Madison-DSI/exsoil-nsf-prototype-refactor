@@ -16,13 +16,13 @@ runs natively on both Intel/AMD and Apple Silicon machines.
 
 ![Version Lineage](docs/ctsm-architecture-guide/lineage-chart.png)
 
-The ExSOIL container is built on **CTSM 5.4.002**, NCAR's standalone
-land modeling framework. CTSM assembles CLM 6.0 (the land model code),
-CIME 6.1 (the build and case management system), and the NEON tower
-workflow (48 site configurations) into a single release. Our container
-adds the arm64/amd64 multi-platform build, a conda-forge Python
-analysis stack, and project-specific notebooks and analysis tools on
-top.
+The ExSOIL container is built on **CTSM 5.4** (tag ctsm5.4.043),
+NCAR's standalone land modeling framework. CTSM assembles CLM 6.0
+(the land model code), CIME 6.1 (the build and case management
+system), and the NEON tower workflow (48 site configurations) into
+a single release. Our container adds the arm64/amd64 multi-platform
+build, a conda-forge Python analysis stack, and project-specific
+notebooks and analysis tools on top.
 
 For a detailed guide to the software architecture, see
 [docs/ctsm-architecture-guide](docs/ctsm-architecture-guide/).
@@ -88,12 +88,14 @@ ctsm-config/                    Machine config overlay for conda-forge library p
 notebooks/                      JupyterLab notebooks
 analytics_modules/              Kalman filter, model misfit, data access, LLM tools
 cesm-tools/                     run_neon_v2.py (NEON site simulation wrapper)
+scripts/
+  pre-download-inputdata.sh     Downloads ~6 GB of input data with retry/fallback
 tests/                          90-test validation suite (tier0 smoke, tier1 case, tier2 build)
 docs/
   getting-started.md            New user guide
-  ctsm-architecture-guide/      Visual guide: how CTSM, CLM, CIME, NEON fit together
-  adr/                          5 Architecture Decision Records
-  decisions/                    Decision briefs (NEON compat, CTSM version selection)
+  ctsm-architecture-guide/      Visual guide + version lineage chart
+  adr/                          6 Architecture Decision Records
+  decisions/                    Decision briefs + investigation trails
   multiarch-rebuild-report/     Technical report on the multi-arch rebuild
   project-summary/              NSF progress report
   ROADMAP.md                    Completed work and planned next steps

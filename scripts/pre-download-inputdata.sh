@@ -16,7 +16,7 @@
 # The global data is static per CTSM version (ctsm5.4.043). It only
 # needs to be downloaded once and can be cached on a persistent volume.
 
-set -euo pipefail
+set -uo pipefail
 
 INPUTDATA="${1:-/home/user/inputdata}"
 mkdir -p "$INPUTDATA"
