@@ -129,12 +129,21 @@ not mutually exclusive:
 then evaluate S3 caching for classroom/workshop scenarios. Bundling
 in the container is only worth it if image size is acceptable.
 
-**Note on data dynamics:** The global input data (parameter files,
-meshes, forcing files) is static per CTSM version. It doesn't change
-between runs or sites. The NEON tower forcing data is also static once
-published, but new months get added as NEON processes new observations.
-Both are safe to cache. The only thing that changes per run is the case
-configuration itself.
+**Data profile (verified 2026-06-05):**
+
+| Category | Size | Changes? | Download speed | Notes |
+|----------|------|----------|---------------|-------|
+| Global input data | ~6 GB | Never (static per CTSM version) | Slow (GDEX CDN unreliable, SVN ~300 KB/s) | Parameter files, meshes, forcing scenarios. Shared across all sites. Download once, cache forever. |
+| NEON site surface data | ~56 KB per site | Never (static per CTSM version) | Fast (GDEX) | One file per site. All 48 sites = ~2.7 MB. |
+| NEON tower forcing | ~150 KB/month per site | New months added as NEON publishes | Fast (Google Cloud, 5 files in 2s) | 84 months available (2018-01 through 2024-12). All 48 sites through 2024 = ~600 MB. |
+
+Total for one site: ~6 GB global + 56 KB site + 12.6 MB forcing = ~6 GB.
+Total for all 48 sites: ~6 GB global (shared) + 600 MB forcing = ~6.6 GB.
+
+The global data is the bottleneck. It's large, slow to download, and
+the GDEX CDN is unreliable. But it only needs to be downloaded once.
+A pre-download script or cache eliminates this cost for all subsequent
+runs. The NEON tower data is trivial.
 
 ### Near-term: Other items
 
