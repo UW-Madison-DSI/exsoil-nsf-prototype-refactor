@@ -202,6 +202,44 @@ color and show that they are the same thing at different versions:
 | Light gray (#888) | Other components (CAM, POP, MOSART, etc.) |
 | Red dashed | Missing / not published / blocker |
 
+## Data access evolution (CMIP generations)
+
+Add a data lane at the bottom showing the CMIP data generations as
+horizontal bars, with connection lines up to the releases that use
+each generation. This explains the current blocker.
+
+**CMIP6 bar:** Solid, green, spanning 2020 through present. Label:
+"Fully published on all NCAR servers." Connection arrows up to:
+- CESM 2.2.0 and 2.2.2 (these use CMIP6 datasets)
+- CTSM 5.2 (uses CMIP6 datasets)
+- Older NEON runs (CMIP6 SSP3-7.0 forcing covers 2015-2100)
+
+**CMIP7 bar:** Two segments:
+- **Historical segment** (solid, covers 1850-2023): Label "Published."
+  Connection up to CTSM 5.4 CLM 6.0 physics.
+- **SSP/future segment** (red dashed or empty, covers 2024+): Label
+  "NOT YET PRODUCED." This is the gap.
+
+**The critical annotation:** NEON tower simulations cover 2018-2021.
+The historical period in CMIP ends around 2014. So NEON runs need
+SSP-era forcing data to cover 2015-2021. With CMIP6, this data
+exists (SSP3-7.0 files are published). With CMIP7, it does not.
+
+Show this as:
+```
+NEON run period: 2018-2021
+                    |
+         Falls in SSP era (post-2014)
+                    |
+    CMIP6 SSP: available ✓     CMIP7 SSP: not produced ✗
+         |                              |
+    CTSM 5.2 works              CTSM 5.4 blocked
+```
+
+This makes the data gap concrete: it's not that NCAR forgot to
+upload files. It's that CMIP7 only covers the historical period so
+far, and NEON runs need SSP-era coverage that CMIP7 hasn't produced.
+
 ## What this diagram should communicate at a glance
 
 1. CESM and CTSM are both assemblies of components, with CTSM being
