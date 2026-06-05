@@ -155,6 +155,41 @@ download "lnd/clm2/surfdata_esmf/NEON/ctsm5.4.0/surfdata_1x1_NEON_KONZ_hist_2000
     "$GDEX/lnd/clm2/surfdata_esmf/NEON/ctsm5.4.0/surfdata_1x1_NEON_KONZ_hist_2000_78pfts_c251023.no_nan_fill.nc"
 
 echo ""
+echo "--- Additional data (discovered in build/run stage) ---"
+download "lnd/clm2/cropdata/calendars/processed/gdds_20230829_161011.tweaked_latlons.no_nan_fill.nc" \
+    "$GDEX/lnd/clm2/cropdata/calendars/processed/gdds_20230829_161011.tweaked_latlons.no_nan_fill.nc"
+
+download "lnd/clm2/paramdata/exice_init_0.125x0.125_c20220516.nc" \
+    "$SVN/lnd/clm2/paramdata/exice_init_0.125x0.125_c20220516.nc" \
+    "$GDEX/lnd/clm2/paramdata/exice_init_0.125x0.125_c20220516.nc"
+
+download "lnd/clm2/dustemisdata/Prigent_2005_roughness_0.25x0.25_cdf5_c260218.nc" \
+    "$GDEX/lnd/clm2/dustemisdata/Prigent_2005_roughness_0.25x0.25_cdf5_c260218.nc"
+
+download "atm/datm7/NASA_LIS/clmforc.Li_2016_climo1995-2013.360x720.lnfm_Total_NEONarea_c210625.nc" \
+    "$FTP/atm/datm7/NASA_LIS/clmforc.Li_2016_climo1995-2013.360x720.lnfm_Total_NEONarea_c210625.nc" \
+    "$SVN/atm/datm7/NASA_LIS/clmforc.Li_2016_climo1995-2013.360x720.lnfm_Total_NEONarea_c210625.nc"
+
+download "atm/datm7/NASA_LIS/ESMF_MESH.Li_2016.360x720.NEONarea_cdf5_c221104.nc" \
+    "$FTP/atm/datm7/NASA_LIS/ESMF_MESH.Li_2016.360x720.NEONarea_cdf5_c221104.nc" \
+    "$SVN/atm/datm7/NASA_LIS/ESMF_MESH.Li_2016.360x720.NEONarea_cdf5_c221104.nc"
+
+download "lnd/clm2/snicardata/snicar_drdt_bst_fit_60_c070416.nc" \
+    "$FTP/lnd/clm2/snicardata/snicar_drdt_bst_fit_60_c070416.nc" \
+    "$SVN/lnd/clm2/snicardata/snicar_drdt_bst_fit_60_c070416.nc"
+
+download "lnd/clm2/firedata/clmforc.Li_2017_HYDEv3.2_CMIP6_hdm_0.5x0_ESMFmesh_cdf5_100621.nc" \
+    "$FTP/lnd/clm2/firedata/clmforc.Li_2017_HYDEv3.2_CMIP6_hdm_0.5x0_ESMFmesh_cdf5_100621.nc" \
+    "$SVN/lnd/clm2/firedata/clmforc.Li_2017_HYDEv3.2_CMIP6_hdm_0.5x0_ESMFmesh_cdf5_100621.nc"
+
+download "lnd/clm2/firedata/clmforc.Li_2025_CMIP7_SSP3CMIP6_hdm_0.5x0.5_simyr1850-2100_c250717.nc" \
+    "$GDEX/lnd/clm2/firedata/clmforc.Li_2025_CMIP7_SSP3CMIP6_hdm_0.5x0.5_simyr1850-2100_c250717.nc"
+
+download "lnd/clm2/paramdata/finundated_inversiondata_0.9x1.25_c170706.nc" \
+    "$FTP/lnd/clm2/paramdata/finundated_inversiondata_0.9x1.25_c170706.nc" \
+    "$SVN/lnd/clm2/paramdata/finundated_inversiondata_0.9x1.25_c170706.nc"
+
+echo ""
 echo "--- NEON tower forcing data (KONZ, from neonscience.org) ---"
 NEON="https://storage.neonscience.org/neon-ncar/NEON"
 SITE="${NEON_SITE:-KONZ}"
