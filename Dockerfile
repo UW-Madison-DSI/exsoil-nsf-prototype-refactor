@@ -103,6 +103,14 @@ COPY ctsm-config/machines/container/config_machines.xml \
 COPY ctsm-config/machines/container/container.cmake \
      ${CTSM_ROOT}/ccs_config/machines/container/container.cmake
 
+# NEON usermods set MPILIB=mpi-serial, but conda-forge's MPICH is always
+# on the library path. A binary built with CIME's mpi-serial stubs
+# conflicts with the real MPICH .so at runtime, causing
+# "MPI routine before initializing MPICH" errors. Remove the override
+# so cases use the machine default (mpich).
+RUN sed -i '/MPILIB=mpi-serial/d' \
+    ${CTSM_ROOT}/cime_config/usermods_dirs/clm/NEON/defaults/shell_commands
+
 ENV CESMDATAROOT=/home/user \
     CIME_MACHINE=container \
     CESMROOT=${CTSM_ROOT}

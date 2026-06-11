@@ -90,6 +90,19 @@ across multiple CTSM versions and NCAR data servers.
 | Git user config | CIME6 | CIME6 commits during case.build |
 | NCAR data server migration | Data infra | ctsm5.4.002 pointed at old servers; 5.4.043 uses GDEX |
 | GDEX CDN reliability | Data download | CDN redirect chain intermittent; retries needed |
+| `MPILIB=mpi-serial` conflict | MPI runtime | CIME serial stubs conflict with conda-forge MPICH at runtime; patched NEON usermods to use mpich |
+
+### End-to-end simulation (June 2026)
+
+First successful NEON tower site simulation in the container.
+
+| Milestone | Status | Reference |
+|-----------|--------|-----------|
+| Diagnose MPI initialization failure | Done | mpi-serial stubs conflict with conda-forge MPICH |
+| Patch NEON usermods for mpich | Done | `Dockerfile` sed removes `MPILIB=mpi-serial` |
+| Add mpi-serial mpirun safety net | Done | `config_machines.xml` |
+| 1-day KONZ transient simulation | Done | 31 variables, 48 time steps, valid NetCDF output |
+| xarray reads CLM output (FSH, TSOI, H2OSOI) | Done | Soil temp, moisture, sensible heat flux |
 
 ---
 
@@ -100,13 +113,13 @@ The container can:
 - Discover and configure all 48 NEON tower sites
 - Compile CTSM from Fortran source (case.build)
 - Download all global input data (parameter files, forcing, meshes)
-- Set up a NEON transient case through case.setup
+- **Run a complete NEON simulation end-to-end** (case.submit produces CLM history files)
+- Read simulation output with xarray for analysis
 
-The remaining gap is operational: CIME's built-in `check_input_data`
-doesn't reliably download all files due to the GDEX CDN redirect chain
-and server fallback behavior. Pre-downloading the ~19 problem files
-manually works (19/19 succeeded with retries). NEON tower forcing data
-is available through approximately April 2023 for KONZ.
+The full pipeline (pre-download, case.build, case.submit, archive,
+xarray analysis) has been validated at KONZ with a 1-day transient run.
+NEON tower forcing data is available through September 2024 for KONZ
+(84 monthly files).
 
 ---
 
@@ -149,8 +162,8 @@ runs. The NEON tower data is trivial.
 
 | Item | Priority | Description |
 |------|----------|-------------|
-| **Update Dockerfile to ctsm5.4.043** | High | Commit the tag change and document the rationale (GDEX server support). |
-| **Shorten default NEON run period** | High | KONZ tower data is available through ~Apr 2023. Adjust `run_neon_v2.py` defaults or documentation to use 2018-2023 instead of 2018-2024. |
+| ~~Update Dockerfile to ctsm5.4.043~~ | ~~High~~ | Done. Tag change committed with GDEX server support. |
+| **Shorten default NEON run period** | High | KONZ tower data is available through Sep 2024 (84 files). Adjust documentation to use 2018-2024. |
 | **amd64 build validation** | Medium | All local testing was on arm64. Run tier0+tier1 on an amd64 machine. |
 | **CI test integration** | Medium | Wire the test suite into the GitHub Actions workflow. |
 | **PR and merge** | Medium | Open PR from `feature/arm64-multiarch-rebuild` to `dev` or `main`. |
@@ -160,7 +173,7 @@ runs. The NEON tower data is trivial.
 
 | Item | Priority | Description |
 |------|----------|-------------|
-| **End-to-end NEON simulation test** | High | Run a complete transient simulation at KONZ (2018-2023) with the pre-download script, verify history file output. |
+| ~~End-to-end NEON simulation test~~ | ~~High~~ | Done. 1-day KONZ transient produces 31-variable CLM output. |
 | **Modeling_Hub notebook** | High | Connect the notebook to either live simulation output or NCAR's pre-computed output (available for 45 sites at storage.neonscience.org). |
 | **Design_Hub_v2 validation** | Medium | Test perturbation experiments end-to-end. |
 | **NEON observation pipeline** | Medium | Implement `download_eval_files` to fetch processed tower observations for model-data comparison. |

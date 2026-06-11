@@ -5,6 +5,7 @@ All notable changes to the ExSOIL NSF Prototype container.
 ## [Unreleased] - feature/arm64-multiarch-rebuild
 
 ### Added
+- End-to-end NEON simulation support (case.build + case.submit produce CLM history files)
 - Multi-architecture Docker support (amd64 + arm64) on Ubuntu 24.04
 - Standalone CTSM 5.4.043 with native NEON tower site workflow (48 sites)
 - Reproducible conda-lock environment for both platforms
@@ -24,6 +25,8 @@ All notable changes to the ExSOIL NSF Prototype container.
 - CI/CD workflow updated for multi-arch builds
 
 ### Changed
+- NEON usermods: removed `MPILIB=mpi-serial` override (conflicts with conda-forge MPICH at runtime)
+- config_machines.xml: added `mpi-serial` mpirun entry as safety net (uses `mpiexec -n 1`)
 - Base image: CentOS 8 (EOL) to Ubuntu 24.04 LTS
 - Model: CESM 2.2.2 to standalone CTSM 5.4.043
 - Python: 3.7 (via old conda env) to 3.13 (via conda-lock)

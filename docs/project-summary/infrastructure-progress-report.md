@@ -1,6 +1,6 @@
 # Infrastructure Progress Report: ExSOIL Containerized Modeling Environment
 
-**Period:** May-June 2026
+**Period:** May-June 2026 (updated June 10)
 **Project:** ExSOIL NSF Prototype
 **Prepared by:** Steven Wangen, UW-Madison Data Science Institute
 
@@ -143,6 +143,38 @@ site, available for 48 sites through December 2024) downloads in
 seconds from Google Cloud Storage. Both categories are suitable for
 caching on university infrastructure.
 
+### End-to-end NEON simulation
+
+With input data resolved and the build pipeline working, the final
+step was executing an actual CLM simulation inside the container. A
+1-day transient run at the KONZ (Konza Prairie, Kansas) NEON site
+was completed successfully, validating the full pipeline from case
+creation through archived output.
+
+The simulation pipeline:
+
+1. **Pre-download** global input data (~6 GB, 31 files with retries)
+2. **Create case** via `run_tower --neon-sites KONZ --run-type transient`
+3. **Build** the Fortran model from source (~100 seconds)
+4. **Download** NEON tower forcing data (84 monthly files from Google Cloud)
+5. **Run** the model via `case.submit` (CIME manages execution)
+6. **Archive** output (history files, restart files, logs)
+7. **Analyze** with Python (xarray reads CLM output directly)
+
+The output contains 31 CLM variables across 48 half-hourly time
+steps, including soil temperature (TSOI), soil moisture (H2OSOI),
+and sensible heat flux (FSH). These are the variables researchers
+need for model-observation comparison at NEON sites.
+
+One compatibility issue was resolved during this phase: the NEON
+workflow defaults to a serial MPI stub library (`mpi-serial`), but
+in a conda-forge environment the real MPICH shared libraries are
+always present on the linker path. The stub and real library
+conflict at runtime, causing the model to crash before it starts.
+The fix was straightforward: the container patches the NEON defaults
+to use conda-forge's MPICH directly, which works correctly with the
+standard `mpiexec` launcher.
+
 ### Documentation
 
 The rebuild, migration, and data resolution are documented through:
@@ -188,20 +220,32 @@ also proved unreliable (intermittent failures on a 3-hop redirect
 chain), requiring a pre-download script with retries and server
 fallback.
 
+## Current Status
+
+The container now supports the full research workflow: create a
+simulation, build the model, run it, and analyze the output. All
+90 automated tests pass on arm64. The pipeline has been validated
+end-to-end with a KONZ transient simulation that produces the
+soil and flux variables needed for model-observation comparison.
+
 ## Next Steps
 
-1. **End-to-end simulation validation.** A full KONZ transient
-   simulation (pre-download, case.build, case.submit) is currently
-   in progress. Success here validates the complete pipeline.
+1. **Multi-day and multi-site validation.** Extend the validated
+   1-day KONZ run to longer periods (months to years) and additional
+   NEON sites. The infrastructure supports all 48 sites; validation
+   should confirm consistent behavior across representative sites.
 
 2. **Data caching strategy.** The ~6 GB of global input data should
    be cached (on university S3 or bundled in the container) to
    eliminate the slow download step for subsequent users.
 
-3. **CI/CD test integration.** Wire the 90-test validation suite
+3. **Science notebook validation.** Connect the Modeling_Hub notebook
+   to simulation output for model-data evaluation and calibration.
+   Test Design_Hub and Data_Hub workflows end-to-end.
+
+4. **CI/CD test integration.** Wire the 90-test validation suite
    into the GitHub Actions workflow for automated testing on both
    architectures.
 
-4. **Science notebook validation.** Connect the Modeling_Hub notebook
-   to simulation output for model-data evaluation and calibration.
-   Test Design_Hub and Data_Hub workflows end-to-end.
+5. **PR and merge.** Open pull request from the feature branch to
+   main and publish the updated container image.

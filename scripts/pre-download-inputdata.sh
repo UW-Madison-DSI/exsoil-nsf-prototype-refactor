@@ -189,16 +189,10 @@ download "lnd/clm2/paramdata/finundated_inversiondata_0.9x1.25_c170706.nc" \
     "$FTP/lnd/clm2/paramdata/finundated_inversiondata_0.9x1.25_c170706.nc" \
     "$SVN/lnd/clm2/paramdata/finundated_inversiondata_0.9x1.25_c170706.nc"
 
-echo ""
-echo "--- NEON tower forcing data (KONZ, from neonscience.org) ---"
-NEON="https://storage.neonscience.org/neon-ncar/NEON"
-SITE="${NEON_SITE:-KONZ}"
-for year in 2018 2019 2020 2021 2022 2023 2024; do
-    for month in 01 02 03 04 05 06 07 08 09 10 11 12; do
-        download "atm/cdeps/v4/${SITE}/${SITE}_atm_${year}-${month}.nc" \
-            "$NEON/atm/cdeps/v4/${SITE}/${SITE}_atm_${year}-${month}.nc"
-    done
-done
+# NOTE: NEON tower forcing data (150 KB/month) is NOT pre-downloaded here.
+# CIME downloads it directly into the case's run/inputdata/ directory
+# from storage.neonscience.org during check_input_data. Those files are
+# small, fast, and go to a different path than $DIN_LOC_ROOT.
 
 echo ""
 echo "========================================="

@@ -31,6 +31,12 @@
         <arg name="anum_tasks"> -n {{ total_tasks }}</arg>
       </arguments>
     </mpirun>
+    <mpirun mpilib="mpi-serial">
+      <executable>mpiexec</executable>
+      <arguments>
+        <arg name="anum_tasks"> -n 1</arg>
+      </arguments>
+    </mpirun>
     <module_system type="none">
     </module_system>
     <RUNDIR>$CIME_OUTPUT_ROOT/$CASE/run</RUNDIR>
