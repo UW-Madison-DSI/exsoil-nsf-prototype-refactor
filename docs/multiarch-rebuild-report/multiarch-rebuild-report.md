@@ -36,26 +36,9 @@ Nothing, operationally. The image is published to the same GitHub Container Regi
 
 ---
 
-## What is inside the container
+Three products are in play, each nesting inside the next. **CESM** (Community Earth System Model) is the full coupled Earth system: atmosphere (CAM), ocean (POP/MOM6), sea ice (CICE), ice sheets (CISM), waves (WW3), and land (CLM), all exchanging energy and moisture through a coupler. It is designed for global climate projections. **CTSM** (Community Terrestrial Systems Model) is a self-contained release of just the land portion. It includes CLM (the land simulation code), CIME (the build and case management system), DATM (a data atmosphere that reads weather from files instead of simulating it), a coupler (CMEPS), and the NEON tower workflow (48 pre-configured site setups). CIME and CLM share common ancestry with CESM (they are developed in the same repositories), but CTSM is packaged and released independently by NCAR as its own product. It is what NCAR recommends for single-site land experiments.
 
-Most of the modeling components (CTSM, CLM, CIME, DATM, the NEON workflow) are stock NCAR software that any researcher would use. What ExSOIL adds: the multi-architecture container build, the conda-forge compilation environment, the pre-download script for unreliable NCAR servers, and the project-specific analysis notebooks and modules.
-
-| Component | What it does | Source | Status |
-|-----------|-------------|--------|--------|
-| **CTSM 5.4** | Community Terrestrial Systems Model. Standalone land modeling framework from NCAR. Assembles CLM, CIME, and the NEON workflow into a single release. | NCAR | Working |
-| **CLM 6.0** | Community Land Model. The Fortran code that simulates soil temperature, moisture, carbon cycling, vegetation, and hydrology. This is the model that produces the scientific output. | NCAR | Working |
-| **CIME 6.1** | Common Infrastructure for Modeling the Earth. The build and case management system: `create_newcase`, `case.setup`, `case.build`, `case.submit`. | NCAR | Working |
-| **DATM** | Data atmosphere. CTSM has an "atmosphere input" slot that CLM reads from at each time step. In a full CESM coupled run, CAM (the atmosphere model) fills that slot with simulated weather. In a standalone NEON run, DATM fills the same slot with observed weather read from files. CLM doesn't know or care which one is connected; it just receives temperature, humidity, wind, radiation, and precipitation through the same coupler interface. DATM is a simpler alternative to CAM that reads files instead of running a physics simulation. | NCAR | Working |
-| **NEON site surface data** | A static description of the physical land at each tower location: soil type, soil layer depths, vegetation cover (grass, forest, crop), terrain elevation, drainage properties. One file per site (~56 KB). Sets the stage: "here is what the ground looks like at Konza Prairie." Does not change over time. Used by ExSOIL v1 (partially), ExSOIL v2, and any standalone CTSM NEON run. Not used in full CESM (which uses global surface datasets). | NCAR | Available |
-| **NEON tower forcing** | The weather happening above that ground, measured continuously by the tower instruments. Temperature, humidity, wind speed, incoming solar radiation, and precipitation, recorded every 30 minutes. Drives the simulation forward through time. Each monthly file (~150 KB) contains ~1,440 half-hourly records. | NEON | Available |
-| **NEON terrestrial observations** | What the instruments measure *in and on* the ground: soil temperature at multiple depths, soil moisture at multiple depths, soil CO2 concentration, eddy covariance flux measurements (net carbon exchange, latent heat, sensible heat), vegetation structure (leaf area, canopy height), plant phenology, litter and root biomass, nutrient cycling. This is the **ground truth** that model predictions get compared against. The whole point of ExSOIL: compare what CLM predicts against what the tower actually measured. CTSM includes a `download_eval_files` function to fetch processed observation products. | NEON | Not yet integrated |
-| **NEON tower workflow** | Combines site surface data and tower forcing: downloads both for a given site, creates a simulation case, and wires DATM to read the tower observations. Available natively in CTSM 5.2+ and ExSOIL v2. Was grafted (and broken) in ExSOIL v1. Not available in CESM 2.x; will ship with CESM 3.x. | NCAR | Working |
-| **MPICH** | Message Passing Interface library for parallel execution. In the container, simulations run on a single core via `mpiexec -n 1`. | conda-forge | Working |
-| **Python analysis stack** | xarray, cartopy, matplotlib, scipy, pandas, bokeh, panel, JupyterLab. | conda-forge | Working |
-| **Pre-download script** | Downloads ~6 GB of global input data from NCAR servers with retries and fallback across GDEX, SVN, and FTP. | ExSOIL | Working |
-| **analytics_modules** | Kalman filter calibration, model misfit diagnostics, S3 data access. | ExSOIL | Needs validation |
-| **Modeling_Hub notebook** | Model-data evaluation and Kalman filter calibration. | ExSOIL | Needs validation |
-| **Design_Hub_v2 notebook** | CLM forcing perturbation experiments, scenario comparison. | ExSOIL | Needs validation |
+The original **ExSOIL** container (`escomp/cesm-lab-neon`, October 2022) was not built on CTSM. It was built on the full CESM 2.2 framework and carried the complete source code for the atmosphere, ocean, sea ice, ice sheet, and wave models (~3-4 GB) even though none of them were used. The NEON tower workflow did not exist in any CESM 2.x release, so it was grafted in from a development branch of CTSM that predated any official release. That graft broke as the components diverged. The container ran on CentOS 8 (end-of-life), Python 3.7 (end-of-life), and only supported Intel/AMD processors. This report covers the rebuild, which replaces the CESM base with standalone CTSM 5.4.
 
 ---
 
@@ -144,27 +127,44 @@ The project uses a three-file system documented in [ADR-0003](../adr/0003-conda-
 
 ---
 
-## Validation workflow
+## Calibration and validation
 
-The end goal of ExSOIL is not just running CLM, but evaluating whether its predictions match what the NEON instruments actually measured. This section describes what that evaluation looks like, how uncertainty is handled, and where the current implementation stands.
+CLM ships with default parameter values (soil thermal conductivity, hydraulic conductivity, root depth distribution, stomatal conductance, and hundreds more) that are tuned to global averages. The soil at Konza Prairie is not the same as the soil at a NEON site in Alaska or Florida. The core research question is whether those defaults are adequate for a given site, and if not, which parameters need adjustment.
 
-### Diagnostic visualizations
+This is where the Kalman filter calibration comes in. It takes the mismatch between CLM's predictions and the NEON terrestrial observations and works backward: if the model consistently predicts soil temperature 2 degrees too warm, which parameter adjustments (within physically plausible bounds) would bring the prediction closer to what the sensors measured? The output is a set of site-specific parameter values that make CLM better match that particular location. The scientific value is twofold: better predictions at that site, and insight into what CLM gets systematically wrong (if thermal conductivity always needs adjustment at grassland sites, that points to a structural issue in how CLM represents grassland soils).
 
-Model-observation comparison for land surface models follows established patterns. Each addresses a different question about model performance.
+An open question is what the actual workflow target is. There are two distinct goals, and they require different levels of validation:
+
+- **Diagnostic comparison:** Run CLM with default parameters, compare output against NEON observations, and assess where the model is right and where it falls short. This is useful on its own for understanding model behavior, but it treats CLM as a fixed object being evaluated.
+- **Kalman filter calibration:** Use the model-observation mismatch to iteratively adjust CLM's parameters, producing a calibrated model tuned to a specific site. This is the more ambitious goal and the one the `analytics_modules` were built for. If this is the primary use case, the diagnostic comparison is a means to an end (quantifying the misfit that drives calibration), not an end in itself.
+
+We need to confirm with Jingyi which of these is the target before investing in notebook validation. If the goal is calibration, the diagnostic visualizations are intermediate outputs in that pipeline rather than standalone deliverables.
+
+### Model-observation comparison
+
+Regardless of the end goal, the comparison between CLM output and NEON observations is the foundation. "Evaluating" means comparing CLM's predictions (soil temperature, soil moisture, carbon fluxes, heat fluxes) against the actual measurements recorded by NEON sensors at the same site, over the same time period. The model says soil temperature at 10 cm was 12.3 degrees on January 15; the NEON sensor at 10 cm recorded 11.8 degrees. That comparison, repeated across variables, depths, and time, quantifies where the model is accurate and where it diverges.
+
+The comparison uses standard diagnostic visualizations (time series, seasonal cycles, depth profiles, scatter plots, Taylor diagrams) that each answer a different question about model performance.
+
+<details>
+<summary>Diagnostic visualizations (details)</summary>
 
 | Diagnostic | What it shows | What failures look like |
 |-----------|--------------|------------------------|
-| **Time series** | CLM's predicted soil temperature (or moisture, or heat flux) plotted alongside the NEON sensor measurement over the same period. The most intuitive view. | Model diverges from observations during specific seasons or events (e.g., always too warm in July, misses freeze events). |
-| **Diurnal cycle** | Half-hourly data averaged by time of day. Does CLM capture the daily heating/cooling pattern? | Amplitude wrong (too hot at midday, too cold at night) or timing shifted (peak temperature an hour late). |
+| **Time series** | CLM's predicted value plotted alongside the NEON sensor measurement over the same period. The most intuitive view. | Model diverges during specific seasons or events (e.g., always too warm in July, misses freeze events). |
+| **Diurnal cycle** | Half-hourly data averaged by time of day. Does CLM capture the daily heating/cooling pattern? | Amplitude wrong (too hot at midday, too cold at night) or timing shifted (peak an hour late). |
 | **Seasonal cycle** | Monthly means over the simulation period. Captures freeze/thaw timing, growing season onset, summer drought stress. | Spring thaw too early, growing season too long, winter temperatures biased. |
 | **Depth profiles** | Soil temperature or moisture as a function of depth, model layers vs sensor depths. | Surface close but deeper layers diverge. Common when soil thermal properties are miscalibrated. |
-| **Scatter plots** | Model prediction vs observation with a 1:1 line. Gives correlation (R2), bias, and RMSE in a single view. | Systematic offset from the 1:1 line (consistent bias). Wide scatter (poor correlation). |
+| **Scatter plots** | Model vs observation with a 1:1 line. Gives correlation (R2), bias, and RMSE in a single view. | Systematic offset from the 1:1 line (consistent bias). Wide scatter (poor correlation). |
 | **Taylor diagrams** | Polar plot showing correlation, standard deviation ratio, and centered RMS difference for multiple variables simultaneously. | Dots far from the reference point. Lets you compare performance across variables at a glance. |
 | **Residual analysis** | Model minus observed over time. Reveals systematic patterns vs random error. | "Always 2 degrees too warm in summer" is a systematic bias. Random scatter around zero means unbiased. |
 
-### Uncertainty quantification
+</details>
 
-CLM's output is deterministic for a given set of inputs. A single run produces one predicted value per variable per time step, with no uncertainty bounds. But uncertainty enters from multiple directions, and there are established ways to quantify it.
+When the model disagrees with observations, the natural question is whether the disagreement is meaningful or within the range of uncertainty. Both sides of the comparison carry uncertainty: the observations have sensor precision and representativeness limitations, and the model has parameters that could plausibly take a range of values. Understanding the uncertainty envelope around both the predictions and the measurements is what separates "the model is wrong" from "the model is within the range of what we'd expect given what we don't know." This matters for the calibration step: you only want to adjust model parameters to fix real biases, not to overfit to noise in the observations.
+
+<details>
+<summary>Uncertainty quantification (details)</summary>
 
 **Observation uncertainty.** NEON sensor measurements have their own uncertainty. Temperature sensors have instrument precision (~0.1 degrees C), but the bigger issue is representativeness: a sensor at one spot in a prairie may not represent the grid cell CLM is simulating. NEON publishes quality flags and uncertainty estimates with their data products, particularly for the eddy covariance flux measurements (which have well-documented random and systematic error budgets).
 
@@ -174,13 +174,15 @@ CLM's output is deterministic for a given set of inputs. A single run produces o
 
 **Structural uncertainty.** CLM makes simplifying assumptions (number of soil layers, how roots take up water, biogeochemistry parameterizations). Quantifying this requires comparing CLM against a different land model entirely, which is outside the scope of ExSOIL.
 
+</details>
+
 ### Current validation status
 
 | Capability | Tool | Status |
 |-----------|------|--------|
 | Run CLM, produce output | CTSM + NEON workflow | Working |
 | Read output with Python | xarray | Working |
-| Fetch NEON observations for comparison | `download_eval_files` | Not yet integrated |
+| Fetch NEON observations for comparison | `download_eval_files` | Not yet validated |
 | Time series / scatter / profile diagnostics | Modeling_Hub notebook | Needs validation |
 | Kalman filter calibration | analytics_modules | Needs validation |
 | Perturbation experiments | Design_Hub_v2 notebook | Needs validation |
@@ -189,9 +191,10 @@ The infrastructure to run simulations and read output is in place. The next mile
 
 ---
 
-### CTSM build compatibility fixes
+The migration from CESM 2.2.2 to standalone CTSM 5.4.043 resolved most of the original build compatibility issues. A handful of fixes remain in the container machine config for arm64 compilation and conda-forge library compatibility.
 
-The migration from CESM 2.2.2 to standalone CTSM 5.4.043 resolved most of the original compatibility issues. The remaining fixes are in the container machine config:
+<details>
+<summary>Compatibility fixes (details)</summary>
 
 | Issue | Root cause | Fix | Location |
 |-------|-----------|-----|----------|
@@ -204,24 +207,7 @@ The migration from CESM 2.2.2 to standalone CTSM 5.4.043 resolved most of the or
 
 Issues resolved by the CTSM migration (no longer apply): PIO2 source patches, Python 3.12 pin, cmake <4 pin, bundled `six.py` conflicts, `import imp` deprecation.
 
-### Testing strategy
-
-A three-tier pytest framework runs inside the container via `tests/run_container_tests.sh`:
-
-```bash
-./tests/run_container_tests.sh                    # all tiers
-./tests/run_container_tests.sh tier0              # smoke only (~4s)
-./tests/run_container_tests.sh tier0 tier1        # smoke + case creation (~6s)
-./tests/run_container_tests.sh tier2              # includes case.build (~100s)
-```
-
-| Tier | Tests | Runtime | What it validates |
-|------|-------|---------|-------------------|
-| 0 | 63 | ~4s | Python imports (28 packages), CIME/CTSM module imports, gfortran/gcc/mpiexec presence, Fortran+MPI compilation, NetCDF library presence, CTSM install integrity, env vars |
-| 1 | 13 | ~3s | `query_config --compsets/--grids`, `create_newcase`, `case.setup`, `xmlchange`/`xmlquery` round-trip, `run_tower --help`, NEON site listing |
-| 2 | 14 | ~100s | Full `case.build` producing `cesm.exe` (~100s compilation), NetCDF read/write round-trip, `open_mfdataset`, weighted spatial mean, monthly climatology, zonal mean, albedo calculation, cartopy map rendering, Dask chunked lazy I/O |
-
-**Result:** 90/90 pass on native arm64.
+</details>
 
 ### End-to-end simulation validation
 
@@ -273,13 +259,74 @@ We have not yet reported the data server mismatch or the `mpi-serial`/conda-forg
 
 ---
 
+## Open questions
+
+### For Jingyi (research use cases)
+
+- Which NEON sites are needed? We support all 48, but validation effort should focus on priority sites.
+- What simulation periods? The 1-day KONZ run works; are months, years, or specific date ranges needed?
+- Which output variables matter most? We produce 31 CLM variables; the analysis may only need a subset.
+- What does the current model-observation comparison workflow look like? Does it match the diagnostic patterns we described (time series, depth profiles, Taylor diagrams), or are there different approaches?
+
+### For the team (infrastructure decisions)
+
+- **Delivery model:** Is a distributable Docker container sufficient (researchers pull and run locally), or do we want to host a shared instance (e.g., JupyterHub on campus infrastructure or cloud)? A hosted option eliminates the ~6 GB data download and local Docker requirement, but adds hosting cost and maintenance. A container-only approach is simpler but puts setup burden on each user.
+- Do we cache global input data on campus S3, or bundle it in the container image (~7 GB to ~13 GB)?
+- Do we file an upstream issue with ESCOMP/CTSM about the data server mismatch and mpi-serial conflict, or wait until we better understand whether these are known issues?
+- When do we open the PR to merge to main and publish the image?
+- Do we need amd64 validation before merging, or is arm64-only sufficient for now?
+
+### For NCAR / upstream (unresolved externalities)
+
+- When will a stable CTSM 5.4.x release ship with working GDEX server config so we can move off the dev tag?
+- Is the GDEX CDN reliability being addressed, or is this the new normal?
+- Are the last 3 months of 2024 NEON tower data (Oct-Dec) going to be published?
+
 ## Next steps
 
-1. **Review use cases with Jingyi.** Walk through the validation workflow, diagnostic visualizations, and calibration pipeline with Jingyi to confirm that the container covers her research use cases. Identify any gaps: specific NEON sites, simulation periods, output variables, or analysis patterns that the current setup doesn't support. This should happen before investing in notebook validation so the work is guided by actual research needs rather than assumptions.
-2. **Multi-day and multi-site validation.** Extend the 1-day KONZ run to longer periods and additional NEON sites (prioritize sites based on Jingyi's input).
+1. **Review use cases with Jingyi.** Confirm which NEON sites, simulation periods, output variables, and analysis patterns are needed so subsequent work is guided by actual research requirements.
+2. **Multi-day and multi-site validation.** Extend the 1-day KONZ run to longer periods and additional NEON sites (prioritize based on Jingyi's input).
 3. **Science notebook validation.** Connect Modeling_Hub to simulation output for model-data comparison. Integrate NEON terrestrial observations via `download_eval_files`. Validate the Kalman filter calibration and perturbation experiment workflows.
 4. **Data caching.** Cache global input data on university S3 or bundle it in the container to eliminate the download bottleneck.
 5. **CI/CD test integration.** Wire the 90-test suite into GitHub Actions for both architectures.
 6. **Pin to a stable CTSM release.** When NCAR publishes a 5.4.x release with working GDEX config, upgrade from the dev tag.
 7. **File upstream issue.** Report the data server and mpi-serial findings to ESCOMP/CTSM.
 8. **PR and merge.** Open pull request from the feature branch and publish the updated image.
+
+---
+
+## Testing strategy
+
+A three-tier pytest framework runs inside the container via `tests/run_container_tests.sh`:
+
+| Tier | Tests | Runtime | What it validates |
+|------|-------|---------|-------------------|
+| 0 | 63 | ~4s | Python imports, compiler presence, Fortran+MPI compilation, CTSM install integrity |
+| 1 | 13 | ~3s | Case creation, case.setup, xmlchange/xmlquery, NEON site listing |
+| 2 | 14 | ~100s | Full case.build, NetCDF I/O, cartopy rendering, Dask chunked I/O |
+
+**Result:** 90/90 pass on native arm64.
+
+## Component definitions
+
+Most of the modeling components (CTSM, CLM, CIME, DATM, the NEON workflow) are stock NCAR software that any researcher would use. What ExSOIL adds: the multi-architecture container build, the conda-forge compilation environment, the pre-download script for unreliable NCAR servers, and the project-specific analysis notebooks and modules.
+
+| Component | What it does | Source | Status |
+|-----------|-------------|--------|--------|
+| **CTSM 5.4** | Community Terrestrial Systems Model. Standalone land modeling framework from NCAR. Assembles CLM, CIME, and the NEON workflow into a single release. | NCAR | Working |
+| **CLM 6.0** | Community Land Model. The Fortran code that simulates soil temperature, moisture, carbon cycling, vegetation, and hydrology. Produces the scientific output. | NCAR | Working |
+| **CIME 6.1** | Common Infrastructure for Modeling the Earth. Build and case management: `create_newcase`, `case.setup`, `case.build`, `case.submit`. | NCAR | Working |
+| **CAM** | Community Atmosphere Model. Simulates weather by solving atmospheric physics equations. Fills the "atmosphere input" slot in full CESM runs. | NCAR | Not in ExSOIL |
+| **DATM** | Data atmosphere. Fills the same "atmosphere input" slot as CAM, but reads observed weather from files instead of simulating it. CLM receives the same variables through the same coupler interface either way. | NCAR | Working |
+| **NEON site surface data** | Static description of the land at each tower location: soil type, soil layer depths, vegetation cover, terrain, drainage. One file per site (~56 KB). Does not change over time. | NCAR | Available |
+| **NEON tower forcing** | Weather measured continuously by tower instruments: temperature, humidity, wind, radiation, precipitation, every 30 minutes. Drives the simulation forward through time. ~150 KB/month per site. Published by NEON (Google Cloud). | NEON | Available |
+| **NEON terrestrial observations** | What the instruments measure *in and on* the ground: soil temperature/moisture at depth, eddy covariance fluxes, vegetation structure, phenology, biomass, nutrient cycling. The **ground truth** for model-observation comparison. CTSM includes `download_eval_files` to fetch these; Modeling_Hub has comparison code paths. The plumbing exists but has not been tested in this container. | NEON | Not yet validated |
+| **NEON tower workflow** | Combines site surface data and tower forcing: downloads both, creates a case, wires DATM. Single command: `run_tower --neon-sites KONZ`. | NCAR | Working |
+| **POP2 / MOM6** | Ocean models. Not needed for land-only simulations. | NCAR | Not in ExSOIL |
+| **CICE / CISM / WW3** | Sea ice, ice sheet, and wave models. Not needed for land-only simulations. | NCAR | Not in ExSOIL |
+| **MPICH** | MPI library for parallel execution. Single core in the container via `mpiexec -n 1`. | conda-forge | Working |
+| **Python stack** | xarray, cartopy, matplotlib, scipy, pandas, bokeh, panel, JupyterLab. | conda-forge | Working |
+| **Pre-download script** | Downloads ~6 GB of global input data with retries and fallback (GDEX, SVN, FTP). | ExSOIL | Working |
+| **analytics_modules** | Kalman filter calibration, model misfit diagnostics, S3 data access. | ExSOIL | Needs validation |
+| **Modeling_Hub notebook** | Model-data evaluation and Kalman filter calibration. | ExSOIL | Needs validation |
+| **Design_Hub_v2 notebook** | CLM forcing perturbation experiments, scenario comparison. | ExSOIL | Needs validation |
