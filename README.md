@@ -33,18 +33,21 @@ the CTSM migration, see
 ## Quick start
 
 ```bash
-docker run --rm -p 8888:8888 exsoil-arm64-test
+docker pull ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
+docker run --rm -p 8888:8888 ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
 ```
 
 Open the URL printed in the terminal. In JupyterLab, start with
 `notebooks/Getting_Started_CTSM_NEON.ipynb` to verify the environment
-and explore available NEON sites. No credentials needed.
+and explore available NEON sites. No credentials needed. Global input
+data (~6 GB) is pre-loaded in the image; only site-specific NEON tower
+forcing downloads at runtime (small, fast).
 
 For the full analysis workflows (which pull data from S3), pass your
 credentials:
 
 ```bash
-docker run --rm -p 8888:8888 --env-file .env exsoil-arm64-test
+docker run --rm -p 8888:8888 --env-file .env ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
 ```
 
 See [docs/getting-started.md](docs/getting-started.md) for detailed
@@ -89,12 +92,14 @@ notebooks/                      JupyterLab notebooks
 analytics_modules/              Kalman filter, model misfit, data access, LLM tools
 cesm-tools/                     run_neon_v2.py (NEON site simulation wrapper)
 scripts/
-  pre-download-inputdata.sh     Downloads ~6 GB of input data with retry/fallback
+  pre-download-inputdata.sh     Downloads input data with retry/fallback (used to build release)
+  download-release-data.sh      Fetches data from GitHub Release during Docker build
+  create-inputdata-release.sh   Helper to create tarballs and upload a new release
 tests/                          90-test validation suite (tier0 smoke, tier1 case, tier2 build)
 docs/
   getting-started.md            New user guide
   ctsm-architecture-guide/      Visual guide + version lineage chart
-  adr/                          6 Architecture Decision Records
+  adr/                          10 Architecture Decision Records
   decisions/                    Decision briefs + investigation trails
   multiarch-rebuild-report/     Technical report on the multi-arch rebuild
   project-summary/              NSF progress report
@@ -115,14 +120,14 @@ docs/
 ## Building locally
 
 ```bash
-# Native build with embedded input data (default, ~13 GB image)
-docker build -t exsoil-arm64-test .
+# Full build with embedded input data (default, ~15 GB image)
+docker build -t exsoil .
 
 # Lightweight build without input data (faster, ~7 GB image)
-docker build --build-arg EMBED_INPUTDATA=false -t exsoil-arm64-test .
+docker build --build-arg EMBED_INPUTDATA=false -t exsoil .
 
 # With optional Dask distributed computing stack
-docker build --build-arg INSTALL_DASK_DISTRIBUTED=true -t exsoil-arm64-test .
+docker build --build-arg INSTALL_DASK_DISTRIBUTED=true -t exsoil .
 
 # Run the test suite
 ./tests/run_container_tests.sh tier0 tier1    # quick (6 seconds)
@@ -130,15 +135,22 @@ docker build --build-arg INSTALL_DASK_DISTRIBUTED=true -t exsoil-arm64-test .
 ```
 
 By default, the build embeds ~6 GB of global CTSM input data from a
-GitHub Release so simulations can start without downloading from NCAR.
+[GitHub Release](https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/releases/tag/inputdata-v5.4.043)
+so simulations can start without downloading from NCAR.
 Use `EMBED_INPUTDATA=false` for development builds where you don't
 need to run simulations.
 
 ## CI/CD
 
-`.github/workflows/docker-publish.yml` builds for both architectures
-on every push to `main` and on version tags. Images are pushed to
+`.github/workflows/docker-publish.yml` builds each architecture on a
+separate GitHub Actions runner (amd64 native, arm64 via QEMU), then
+merges them into a multi-arch manifest list. Builds trigger on pushes
+to `main` and on version tags. PR builds skip data embedding for speed.
+
+Images are pushed to
 `ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor`.
+
+Current release: `v2.0.0-rc4` (amd64 + arm64, with embedded input data).
 
 ## License
 
