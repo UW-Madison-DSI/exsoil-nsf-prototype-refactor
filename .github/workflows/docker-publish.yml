@@ -10,7 +10,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # github.repository preserves org casing but Docker requires lowercase
+  IMAGE_NAME: uw-madison-dsi/exsoil-nsf-prototype-refactor
 
 jobs:
   build:
