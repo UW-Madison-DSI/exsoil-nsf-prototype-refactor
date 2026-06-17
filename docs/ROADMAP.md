@@ -125,22 +125,29 @@ NEON tower forcing data is available through September 2024 for KONZ
 
 ## Planned
 
-### Near-term: Data downloads (resolved)
+### Data downloads and CI/CD (resolved, June 2026)
 
-The ~6 GB of global input data is now embedded in the Docker image via
-GitHub Release assets. The data is stored as zstd-compressed tarballs
-attached to release `inputdata-v5.4.043` and fetched during the Docker
-build. The pre-download script (`scripts/pre-download-inputdata.sh`)
-is retained as a fallback tool and for regenerating tarballs when the
-CTSM version changes.
+The ~6 GB of global input data is embedded in the Docker image via
+GitHub Release assets (`inputdata-v5.4.043`). The Dockerfile fetches
+compressed tarballs and split raw files from GitHub's CDN during the
+build. Researchers pull the image and it's ready to run.
 
-Image size increased from ~7 GB to ~13 GB (uncompressed). The trade-off
-is acceptable: 4 extra minutes of pull time eliminates 10-15 minutes
-of unreliable runtime downloads from NCAR's GDEX CDN. For lightweight
-development builds, use `--build-arg EMBED_INPUTDATA=false`.
+The CI/CD pipeline builds both amd64 and arm64 images on separate
+GitHub Actions runners (to avoid disk exhaustion), pushes per-platform
+digests, then merges them into a multi-arch manifest list on GHCR.
 
-University S3 caching remains an option for classroom/workshop scenarios
-where many users pull simultaneously.
+| Milestone | Status |
+|-----------|--------|
+| Embed input data in image via GitHub Release | Done |
+| Multi-arch CI (split per-platform builds) | Done |
+| Published to GHCR (`v2.0.0-rc4`) | Done |
+| amd64 build validated in CI | Done (17 min) |
+| arm64 build validated in CI | Done (32 min, QEMU) |
+
+Image: `ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:v2.0.0-rc4`
+
+Image size: ~14.7 GB uncompressed (~7 GB compressed per architecture).
+For lightweight development builds, use `--build-arg EMBED_INPUTDATA=false`.
 
 **Data profile (verified 2026-06-05):**
 
@@ -162,12 +169,16 @@ runs. The NEON tower data is trivial.
 
 | Item | Priority | Description |
 |------|----------|-------------|
-| ~~Update Dockerfile to ctsm5.4.043~~ | ~~High~~ | Done. Tag change committed with GDEX server support. |
-| **Shorten default NEON run period** | High | KONZ tower data is available through Sep 2024 (84 files). Adjust documentation to use 2018-2024. |
-| **amd64 build validation** | Medium | All local testing was on arm64. Run tier0+tier1 on an amd64 machine. |
-| **CI test integration** | Medium | Wire the test suite into the GitHub Actions workflow. |
+| ~~Update Dockerfile to ctsm5.4.043~~ | ~~High~~ | Done. |
+| ~~Embed input data in image~~ | ~~High~~ | Done. GitHub Release assets, fetched during build. |
+| ~~Multi-arch CI/CD~~ | ~~High~~ | Done. Split per-platform builds, manifest merge. |
+| ~~amd64 build validation~~ | ~~Medium~~ | Done. Built and pushed via CI (17 min native). |
+| ~~Publish to GHCR~~ | ~~Medium~~ | Done. `v2.0.0-rc4` with both architectures. |
+| **Review use cases with Jingyi** | High | Confirm sites, periods, variables, workflow target (diagnostic vs calibration). |
+| **Validate science notebooks** | High | Test Modeling_Hub, Design_Hub_v2 against real CLM 6.0 output. Check variable availability. |
+| **Full-duration simulation** | Medium | Run KONZ for full 84 months (2018-2024) to establish runtime baseline. |
 | **PR and merge** | Medium | Open PR from `feature/arm64-multiarch-rebuild` to `dev` or `main`. |
-| **File ESCOMP GitHub issue** | Low | Report the GDEX CDN reliability issue and the gap between ctsm5.4.002 release config and actual data server. Draft at [docs/ctsm-issue-draft.md](../docs/ctsm-issue-draft.md). May not be needed if ctsm5.4.043 works. |
+| **File ESCOMP GitHub issue** | Low | Report the mpi-serial conflict and data server gap. Draft at `docs/ctsm-issue-draft.md`. |
 
 ### Medium-term
 

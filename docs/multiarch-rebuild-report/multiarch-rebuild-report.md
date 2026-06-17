@@ -179,11 +179,9 @@ Output includes soil temperature (TSOI), soil moisture (H2OSOI), and sensible he
 
 ### Known issues and concerns
 
-#### Data hosting reliability
+#### Data hosting reliability (resolved)
 
-NCAR's new GDEX data server (`osdf-data.gdex.ucar.edu`) uses a 3-hop redirect chain that intermittently returns empty responses or times out. Our pre-download script works around this with 5 retries per file and fallback to SVN and FTP servers. This achieves 100% success across 31 files, but initial data setup still takes 10-15 minutes and any single download can stall for up to 5 minutes before a retry kicks in. The underlying reliability problem is on NCAR's infrastructure; we have no control over it.
-
-**Mitigation options:** Cache the ~6 GB of global input data on university S3 (eliminates NCAR dependency entirely), or bundle it in the container image (increases image size from ~7 GB to ~13 GB but removes the download step).
+NCAR's GDEX CDN is unreliable (3-hop redirect chain, intermittent failures). **Resolved:** global input data is now embedded in the Docker image via GitHub Release assets (`inputdata-v5.4.043`). The data is fetched from GitHub's CDN during the build, not from NCAR at runtime. The pre-download script is retained as a fallback tool.
 
 #### Development tag, not an official release
 
@@ -199,9 +197,9 @@ NEON tower forcing data is available through approximately September 2024 for mo
 
 The NEON workflow defaults to `MPILIB=mpi-serial` (CIME's built-in serial MPI stub). In a conda-forge environment, the real MPICH shared libraries are always on the linker path, and the two conflict at runtime. Our fix patches the NEON usermods in the Dockerfile to remove the `mpi-serial` override so cases use real MPICH. This is a container-level workaround, not a fix in the CTSM source. Any CTSM upgrade will need the same patch reapplied.
 
-#### amd64 not tested end-to-end
+#### amd64 build (resolved)
 
-All local testing (90-test suite, case.build, simulation run) was on native arm64 (Apple Silicon). The amd64 path builds successfully in CI and the lockfiles exist, but the full test suite and simulation have not been exercised on amd64 hardware.
+**Resolved:** The amd64 image now builds and pushes via CI (17 min native on GitHub Actions). Both architectures are published to GHCR as a multi-arch manifest under `v2.0.0-rc4`. End-to-end simulation testing on amd64 hardware has not been done, but the build and push are validated.
 
 #### Science notebooks not validated with simulation output
 
@@ -293,7 +291,7 @@ The infrastructure to run simulations and read output is in place. The next mile
 ### For the team (infrastructure decisions)
 
 - **Delivery model:** Is a distributable Docker container sufficient (researchers pull and run locally), or do we want to host a shared instance (e.g., JupyterHub on campus infrastructure or cloud)? A hosted option eliminates the ~6 GB data download and local Docker requirement, but adds hosting cost and maintenance. A container-only approach is simpler but puts setup burden on each user.
-- Do we cache global input data on campus S3, or bundle it in the container image (~7 GB to ~13 GB)?
+- ~~Do we cache global input data on campus S3, or bundle it in the container?~~ Resolved: embedded in image via GitHub Release assets.
 - Do we file an upstream issue with ESCOMP/CTSM about the data server mismatch and mpi-serial conflict, or wait until we better understand whether these are known issues?
 - When do we open the PR to merge to main and publish the image?
 - Do we need amd64 validation before merging, or is arm64-only sufficient for now?
