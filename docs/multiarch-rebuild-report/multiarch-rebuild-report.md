@@ -127,70 +127,6 @@ The project uses a three-file system documented in [ADR-0003](../adr/0003-conda-
 
 ---
 
-## Calibration and validation
-
-CLM ships with default parameter values (soil thermal conductivity, hydraulic conductivity, root depth distribution, stomatal conductance, and hundreds more) that are tuned to global averages. The soil at Konza Prairie is not the same as the soil at a NEON site in Alaska or Florida. The core research question is whether those defaults are adequate for a given site, and if not, which parameters need adjustment.
-
-This is where the Kalman filter calibration comes in. It takes the mismatch between CLM's predictions and the NEON terrestrial observations and works backward: if the model consistently predicts soil temperature 2 degrees too warm, which parameter adjustments (within physically plausible bounds) would bring the prediction closer to what the sensors measured? The output is a set of site-specific parameter values that make CLM better match that particular location. The scientific value is twofold: better predictions at that site, and insight into what CLM gets systematically wrong (if thermal conductivity always needs adjustment at grassland sites, that points to a structural issue in how CLM represents grassland soils).
-
-An open question is what the actual workflow target is. There are two distinct goals, and they require different levels of validation:
-
-- **Diagnostic comparison:** Run CLM with default parameters, compare output against NEON observations, and assess where the model is right and where it falls short. This is useful on its own for understanding model behavior, but it treats CLM as a fixed object being evaluated.
-- **Kalman filter calibration:** Use the model-observation mismatch to iteratively adjust CLM's parameters, producing a calibrated model tuned to a specific site. This is the more ambitious goal and the one the `analytics_modules` were built for. If this is the primary use case, the diagnostic comparison is a means to an end (quantifying the misfit that drives calibration), not an end in itself.
-
-We need to confirm with Jingyi which of these is the target before investing in notebook validation. If the goal is calibration, the diagnostic visualizations are intermediate outputs in that pipeline rather than standalone deliverables.
-
-### Model-observation comparison
-
-Regardless of the end goal, the comparison between CLM output and NEON observations is the foundation. "Evaluating" means comparing CLM's predictions (soil temperature, soil moisture, carbon fluxes, heat fluxes) against the actual measurements recorded by NEON sensors at the same site, over the same time period. The model says soil temperature at 10 cm was 12.3 degrees on January 15; the NEON sensor at 10 cm recorded 11.8 degrees. That comparison, repeated across variables, depths, and time, quantifies where the model is accurate and where it diverges.
-
-The comparison uses standard diagnostic visualizations (time series, seasonal cycles, depth profiles, scatter plots, Taylor diagrams) that each answer a different question about model performance.
-
-<details>
-<summary>Diagnostic visualizations (details)</summary>
-
-| Diagnostic | What it shows | What failures look like |
-|-----------|--------------|------------------------|
-| **Time series** | CLM's predicted value plotted alongside the NEON sensor measurement over the same period. The most intuitive view. | Model diverges during specific seasons or events (e.g., always too warm in July, misses freeze events). |
-| **Diurnal cycle** | Half-hourly data averaged by time of day. Does CLM capture the daily heating/cooling pattern? | Amplitude wrong (too hot at midday, too cold at night) or timing shifted (peak an hour late). |
-| **Seasonal cycle** | Monthly means over the simulation period. Captures freeze/thaw timing, growing season onset, summer drought stress. | Spring thaw too early, growing season too long, winter temperatures biased. |
-| **Depth profiles** | Soil temperature or moisture as a function of depth, model layers vs sensor depths. | Surface close but deeper layers diverge. Common when soil thermal properties are miscalibrated. |
-| **Scatter plots** | Model vs observation with a 1:1 line. Gives correlation (R2), bias, and RMSE in a single view. | Systematic offset from the 1:1 line (consistent bias). Wide scatter (poor correlation). |
-| **Taylor diagrams** | Polar plot showing correlation, standard deviation ratio, and centered RMS difference for multiple variables simultaneously. | Dots far from the reference point. Lets you compare performance across variables at a glance. |
-| **Residual analysis** | Model minus observed over time. Reveals systematic patterns vs random error. | "Always 2 degrees too warm in summer" is a systematic bias. Random scatter around zero means unbiased. |
-
-</details>
-
-When the model disagrees with observations, the natural question is whether the disagreement is meaningful or within the range of uncertainty. Both sides of the comparison carry uncertainty: the observations have sensor precision and representativeness limitations, and the model has parameters that could plausibly take a range of values. Understanding the uncertainty envelope around both the predictions and the measurements is what separates "the model is wrong" from "the model is within the range of what we'd expect given what we don't know." This matters for the calibration step: you only want to adjust model parameters to fix real biases, not to overfit to noise in the observations.
-
-<details>
-<summary>Uncertainty quantification (details)</summary>
-
-**Observation uncertainty.** NEON sensor measurements have their own uncertainty. Temperature sensors have instrument precision (~0.1 degrees C), but the bigger issue is representativeness: a sensor at one spot in a prairie may not represent the grid cell CLM is simulating. NEON publishes quality flags and uncertainty estimates with their data products, particularly for the eddy covariance flux measurements (which have well-documented random and systematic error budgets).
-
-**Parameter uncertainty.** CLM has hundreds of parameters (soil thermal conductivity, root distribution, stomatal conductance coefficients). Each has a physically plausible range. The Kalman filter calibration in `analytics_modules` is designed to explore this: it adjusts parameters within their physical bounds and quantifies how much the prediction changes. The posterior parameter distribution gives a measure of parametric uncertainty.
-
-**Ensemble perturbation.** Run CLM multiple times with perturbed parameters or perturbed forcing data. The spread of the ensemble is the uncertainty band. This is what the Design_Hub_v2 notebook's perturbation experiments are for: vary inputs systematically and compare the resulting output distributions.
-
-**Structural uncertainty.** CLM makes simplifying assumptions (number of soil layers, how roots take up water, biogeochemistry parameterizations). Quantifying this requires comparing CLM against a different land model entirely, which is outside the scope of ExSOIL.
-
-</details>
-
-### Current validation status
-
-| Capability | Tool | Status |
-|-----------|------|--------|
-| Run CLM, produce output | CTSM + NEON workflow | Working |
-| Read output with Python | xarray | Working |
-| Fetch NEON observations for comparison | `download_eval_files` | Not yet validated |
-| Time series / scatter / profile diagnostics | Modeling_Hub notebook | Needs validation |
-| Kalman filter calibration | analytics_modules | Needs validation |
-| Perturbation experiments | Design_Hub_v2 notebook | Needs validation |
-
-The infrastructure to run simulations and read output is in place. The next milestone is connecting the observation data and validating the diagnostic notebooks against real output from this container.
-
----
-
 The migration from CESM 2.2.2 to standalone CTSM 5.4.043 resolved most of the original build compatibility issues. A handful of fixes remain in the container machine config for arm64 compilation and conda-forge library compatibility.
 
 <details>
@@ -208,6 +144,24 @@ The migration from CESM 2.2.2 to standalone CTSM 5.4.043 resolved most of the or
 Issues resolved by the CTSM migration (no longer apply): PIO2 source patches, Python 3.12 pin, cmake <4 pin, bundled `six.py` conflicts, `import imp` deprecation.
 
 </details>
+
+### What the rebuild gets us
+
+The original container had accumulated significant technical debt. The NEON workflow was not functional when tested during this rebuild, the base OS and Python version were end-of-life, and Apple Silicon users could not run it reliably. But the rebuild is not just a repair job. Moving to standalone CTSM 5.4 and modern infrastructure brings concrete improvements to the research capability.
+
+| Dimension | Before (v1) | After (v2) | Why it matters |
+|-----------|------------|------------|----------------|
+| **Model version** | CLM ~5.x (dev branch graft, no official release) | CLM 6.0 via CTSM 5.4 | CLM 6.0 includes improved soil biogeochemistry, updated plant functional types, and better representation of soil hydrology. Simulations use current science. |
+| **NEON workflow** | Grafted from dev branch; not functional when tested during this rebuild | Native, 48 sites, single command | The NEON workflow is the primary research capability. It was not functional when we tested it on the CESM 2.2 base during this rebuild; it may have worked when the original container was built in 2022. |
+| **Forcing scenarios** | CLM 5.x-era CMIP6 datasets | Updated CMIP6/CMIP7 datasets (nitrogen deposition, aerosols, ozone, population density for fire model) | Simulations extending past the historical period (2018+) use current scenario data. |
+| **NEON tower data** | Through ~2022 | Through September 2024 | Two additional years of observations for model-data comparison and calibration. |
+| **Platform support** | Intel/AMD only (CentOS 8, Python 3.7) | Intel/AMD + Apple Silicon (Ubuntu 24.04, Python 3.13) | Team members on modern Macs can develop and test locally. Security-supported OS and language runtime. |
+| **Data servers** | Old FTP/SVN (NCAR migrating away) | GDEX with fallback to FTP/SVN; pre-download script handles reliability | v1 would likely fail to download data today. v2 is aligned with where NCAR's infrastructure is going. |
+| **Build time** | ~45 min (compiled MPICH, HDF5, NetCDF from source) | ~5 min (conda-forge pre-built binaries) | Faster iteration. Less fragile. No architecture-specific compilation failures. |
+| **Reproducibility** | ~400 packages, no lockfile | 35 direct deps, conda-lock pinned for both architectures | Identical software regardless of when the image is pulled or what hardware is used. |
+| **Image size** | ~10 GB (included 3-4 GB of unused CESM source) | ~7 GB (only land model + stubs) | Faster pull, less disk. The removed code was never executed. |
+
+The one trade-off: v2 requires a pre-download step (10-15 minutes on first run) because NCAR's new GDEX server is unreliable. v1 relied on CIME's built-in downloader, which was simpler when it worked. Caching the data on campus S3 would eliminate this friction entirely.
 
 ### End-to-end simulation validation
 
@@ -259,6 +213,70 @@ We have not yet reported the data server mismatch or the `mpi-serial`/conda-forg
 
 ---
 
+---
+
+## Where we are going: Calibration and validation
+
+The sections above describe what we have: a working container that can run CLM simulations at NEON sites and produce output. Everything below this line describes where we are going: using that output to do science.
+
+CLM ships with default parameter values (soil thermal conductivity, hydraulic conductivity, root depth distribution, stomatal conductance, and hundreds more) that are tuned to global averages. The soil at Konza Prairie is not the same as the soil at a NEON site in Alaska or Florida. The core research question is whether those defaults are adequate for a given site, and if not, which parameters need adjustment.
+
+This is where the Kalman filter calibration comes in. It takes the mismatch between CLM's predictions and the NEON terrestrial observations and works backward: if the model consistently predicts soil temperature 2 degrees too warm, which parameter adjustments (within physically plausible bounds) would bring the prediction closer to what the sensors measured? The output is a set of site-specific parameter values that make CLM better match that particular location. The scientific value is twofold: better predictions at that site, and insight into what CLM gets systematically wrong (if thermal conductivity always needs adjustment at grassland sites, that points to a structural issue in how CLM represents grassland soils).
+
+An open question is what the actual workflow target is. There are two distinct goals, and they require different levels of validation:
+
+- **Diagnostic comparison:** Run CLM with default parameters, compare output against NEON observations, and assess where the model is right and where it falls short. Useful on its own, but treats CLM as a fixed object being evaluated.
+- **Kalman filter calibration:** Use the model-observation mismatch to iteratively adjust CLM's parameters, producing a calibrated model tuned to a specific site. The more ambitious goal and the one the `analytics_modules` were built for. If this is the primary use case, the diagnostic comparison is a means to an end, not an end in itself.
+
+We need to confirm with Jingyi which of these is the target before investing in notebook validation.
+
+### Model-observation comparison
+
+Regardless of the end goal, the comparison between CLM output and NEON observations is the foundation. "Evaluating" means comparing CLM's predictions against the actual measurements recorded by NEON sensors at the same site, over the same time period. That comparison, repeated across variables, depths, and time, quantifies where the model is accurate and where it diverges.
+
+<details>
+<summary>Diagnostic visualizations (details)</summary>
+
+| Diagnostic | What it shows | What failures look like |
+|-----------|--------------|------------------------|
+| **Time series** | CLM's predicted value alongside the NEON sensor measurement. | Model diverges during specific seasons or events. |
+| **Diurnal cycle** | Half-hourly data averaged by time of day. | Amplitude wrong or timing shifted. |
+| **Seasonal cycle** | Monthly means over the simulation period. | Spring thaw too early, growing season too long. |
+| **Depth profiles** | Soil temperature or moisture as a function of depth. | Surface close but deeper layers diverge. |
+| **Scatter plots** | Model vs observation with a 1:1 line. R2, bias, RMSE. | Systematic offset or wide scatter. |
+| **Taylor diagrams** | Polar plot: correlation, std ratio, RMS for multiple variables. | Dots far from the reference point. |
+| **Residual analysis** | Model minus observed over time. | Systematic pattern = bias. Random scatter = unbiased. |
+
+</details>
+
+<details>
+<summary>Uncertainty quantification (details)</summary>
+
+**Observation uncertainty.** Sensor precision (~0.1 C) and representativeness (one spot vs grid cell). NEON publishes quality flags and error budgets.
+
+**Parameter uncertainty.** The Kalman filter adjusts parameters within physical bounds and quantifies how much predictions change. The posterior distribution is the uncertainty measure.
+
+**Ensemble perturbation.** Multiple CLM runs with perturbed parameters or forcing. Ensemble spread = uncertainty band. This is what Design_Hub_v2 does.
+
+**Structural uncertainty.** CLM's simplifying assumptions. Requires comparing against a different land model; outside ExSOIL's scope.
+
+</details>
+
+### Validation pipeline status
+
+| Capability | Tool | Status |
+|-----------|------|--------|
+| Run CLM, produce output | CTSM + NEON workflow | Working |
+| Read output with Python | xarray | Working |
+| Fetch NEON observations for comparison | `download_eval_files` | Not yet validated |
+| Time series / scatter / profile diagnostics | Modeling_Hub notebook | Needs validation |
+| Kalman filter calibration | analytics_modules | Needs validation |
+| Perturbation experiments | Design_Hub_v2 notebook | Needs validation |
+
+The infrastructure to run simulations and read output is in place. The next milestone is connecting the observation data and validating the diagnostic and calibration notebooks against real output from this container.
+
+---
+
 ## Open questions
 
 ### For Jingyi (research use cases)
@@ -267,6 +285,10 @@ We have not yet reported the data server mismatch or the `mpi-serial`/conda-forg
 - What simulation periods? The 1-day KONZ run works; are months, years, or specific date ranges needed?
 - Which output variables matter most? We produce 31 CLM variables; the analysis may only need a subset.
 - What does the current model-observation comparison workflow look like? Does it match the diagnostic patterns we described (time series, depth profiles, Taylor diagrams), or are there different approaches?
+
+### For the team (scope and direction)
+
+- **Is the container sufficient as-is?** We can run CLM at any NEON site, produce output, and read it with Python. Is that enough for researchers to do their work, or is there additional feature development needed to make it usable? For example: do researchers need guided notebooks that walk them through the full workflow? A simplified CLI that hides CIME complexity? Pre-built cases so they skip the build step? Visualization dashboards? The answer determines whether the next phase is polish and documentation or new development.
 
 ### For the team (infrastructure decisions)
 

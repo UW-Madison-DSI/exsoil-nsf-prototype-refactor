@@ -121,6 +121,23 @@ ENV PATH="${CTSM_ROOT}/cime/scripts:${PATH}"
 # Ensure all CTSM files are owned by the user
 RUN chown -R user:ctsm ${CTSM_ROOT}
 
+# Optional: embed global input data from GitHub Release assets.
+# Bakes ~6 GB of static CTSM input data into the image so simulations
+# can start without downloading from NCAR's GDEX/SVN/FTP servers.
+# Build with --build-arg EMBED_INPUTDATA=false for lightweight test builds.
+# See scripts/create-inputdata-release.sh to regenerate the tarballs.
+ARG EMBED_INPUTDATA=true
+ARG INPUTDATA_RELEASE_URL=https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/releases/download/inputdata-v5.4.043
+
+COPY scripts/download-release-data.sh /tmp/download-release-data.sh
+RUN if [ "$EMBED_INPUTDATA" = "true" ]; then \
+      apt-get update -qq && apt-get install -y -qq --no-install-recommends zstd \
+      && bash /tmp/download-release-data.sh "$INPUTDATA_RELEASE_URL" /home/user/inputdata \
+      && chown -R user:ctsm /home/user/inputdata \
+      && apt-get purge -y -qq zstd && apt-get autoremove -y -qq \
+      && rm -rf /var/lib/apt/lists/* /tmp/download-release-data.sh; \
+    fi
+
 
 # =============================================================================
 # Stage 3: Project application layer

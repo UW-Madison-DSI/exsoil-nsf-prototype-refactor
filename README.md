@@ -115,8 +115,11 @@ docs/
 ## Building locally
 
 ```bash
-# Native build (uses your machine's architecture)
+# Native build with embedded input data (default, ~13 GB image)
 docker build -t exsoil-arm64-test .
+
+# Lightweight build without input data (faster, ~7 GB image)
+docker build --build-arg EMBED_INPUTDATA=false -t exsoil-arm64-test .
 
 # With optional Dask distributed computing stack
 docker build --build-arg INSTALL_DASK_DISTRIBUTED=true -t exsoil-arm64-test .
@@ -125,6 +128,11 @@ docker build --build-arg INSTALL_DASK_DISTRIBUTED=true -t exsoil-arm64-test .
 ./tests/run_container_tests.sh tier0 tier1    # quick (6 seconds)
 ./tests/run_container_tests.sh                # full including case.build (2 minutes)
 ```
+
+By default, the build embeds ~6 GB of global CTSM input data from a
+GitHub Release so simulations can start without downloading from NCAR.
+Use `EMBED_INPUTDATA=false` for development builds where you don't
+need to run simulations.
 
 ## CI/CD
 

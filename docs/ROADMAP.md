@@ -125,22 +125,22 @@ NEON tower forcing data is available through September 2024 for KONZ
 
 ## Planned
 
-### Near-term: Make data downloads reliable
+### Near-term: Data downloads (resolved)
 
-The core issue is that CIME's download logic fails intermittently on
-NCAR's new GDEX CDN (3-hop redirect chain, sometimes returns empty
-responses), and some files only exist on one server. Three approaches,
-not mutually exclusive:
+The ~6 GB of global input data is now embedded in the Docker image via
+GitHub Release assets. The data is stored as zstd-compressed tarballs
+attached to release `inputdata-v5.4.043` and fetched during the Docker
+build. The pre-download script (`scripts/pre-download-inputdata.sh`)
+is retained as a fallback tool and for regenerating tarballs when the
+CTSM version changes.
 
-| Approach | Description | Effort | Benefit |
-|----------|-------------|--------|---------|
-| **Robust pre-download script** | A script that runs before `case.submit`, fetching all required input data with retries and server fallback (GDEX -> SVN -> FTP). Could be integrated into `run_neon_v2.py` or run as a standalone setup step. | Low-medium | Immediate fix. Works for any NEON site. No infrastructure needed. |
-| **Cache on university S3** | Download all CTSM input data for common NEON sites once, host on UW-Madison's campus S3 (`campus.s3.wisc.edu`). The `run_neon_v2.py` S3 pathway already supports non-AWS endpoints. Could serve as a FastAPI service with chunked downloads for workshop/classroom use. | Medium-high | Fast, reliable downloads. Good for multi-user settings. Eliminates dependency on NCAR server reliability. |
-| **Bundle static data in container** | Include the ~6 GB of global input data (parameter files, meshes, forcing files that don't change per site) in the Docker image itself. Only site-specific NEON tower observations would need downloading at runtime. | Medium | Zero-download for global data. Increases image size from ~7 GB to ~13 GB. Site-specific data still needs network. |
+Image size increased from ~7 GB to ~13 GB (uncompressed). The trade-off
+is acceptable: 4 extra minutes of pull time eliminates 10-15 minutes
+of unreliable runtime downloads from NCAR's GDEX CDN. For lightweight
+development builds, use `--build-arg EMBED_INPUTDATA=false`.
 
-**Recommendation:** Start with the pre-download script (quick win),
-then evaluate S3 caching for classroom/workshop scenarios. Bundling
-in the container is only worth it if image size is acceptable.
+University S3 caching remains an option for classroom/workshop scenarios
+where many users pull simultaneously.
 
 **Data profile (verified 2026-06-05):**
 
