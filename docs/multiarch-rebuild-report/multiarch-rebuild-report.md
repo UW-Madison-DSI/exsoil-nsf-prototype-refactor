@@ -163,6 +163,32 @@ The original container had accumulated significant technical debt. The NEON work
 
 The one trade-off: v2 requires a pre-download step (10-15 minutes on first run) because NCAR's new GDEX server is unreliable. v1 relied on CIME's built-in downloader, which was simpler when it worked. Caching the data on campus S3 would eliminate this friction entirely.
 
+### Performance baseline
+
+The published image is available on GitHub Container Registry:
+
+```
+docker pull ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:v2.0.0-rc4
+```
+
+| Metric | Value | Notes |
+|--------|-------|-------|
+| GHCR image | `ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor` | |
+| Current tag | `v2.0.0-rc4` | Also tagged `latest` (arm64 only for latest) |
+| Architectures | linux/amd64, linux/arm64 | Multi-arch manifest |
+| Image size (uncompressed) | ~14.7 GB | ~7.9 GB input data + ~6.8 GB OS/conda/CTSM |
+| Image size (compressed) | ~7 GB per architecture | |
+| CI build time (amd64) | 17 min | Native on GitHub Actions |
+| CI build time (arm64) | 32 min | QEMU emulation on amd64 runner |
+| case.build (arm64 native) | ~100 sec | Fortran compilation at runtime |
+| 1-day KONZ simulation | ~60 sec | Excludes build time |
+| Tower data download (12 months) | <5 sec | ~1.8 MB from Google Cloud |
+| Global data download | 0 sec | Embedded in image |
+| Test suite (tier0 + tier1) | ~7 sec | 76 tests |
+| Test suite (tier2, includes case.build) | ~100 sec | 14 tests |
+
+Full-duration simulation baseline (84 months, Jan 2018 through Dec 2024) has not yet been established.
+
 ### End-to-end simulation validation
 
 Beyond the automated test suite, a full NEON simulation was run inside the container:

@@ -272,6 +272,40 @@
         the data on campus S3 would eliminate this friction entirely.
       </p>
 
+      <div class="section-eyebrow">Baseline</div>
+      <h2>Performance baseline</h2>
+
+      <p>
+        The published image is available on GitHub Container Registry. Docker
+        selects the correct architecture automatically.
+      </p>
+
+      <pre>docker pull ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:v2.0.0-rc4</pre>
+
+      <table>
+        <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>GHCR image</td><td><code>ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor</code></td><td></td></tr>
+          <tr><td>Current tag</td><td><code>v2.0.0-rc4</code></td><td>Also tagged <code>latest</code> (arm64 only for latest)</td></tr>
+          <tr><td>Architectures</td><td>linux/amd64, linux/arm64</td><td>Multi-arch manifest; Docker selects automatically</td></tr>
+          <tr><td>Image size (uncompressed)</td><td>~14.7 GB</td><td>~7.9 GB input data + ~6.8 GB OS/conda/CTSM</td></tr>
+          <tr><td>Image size (compressed, registry)</td><td>~7 GB per architecture</td><td></td></tr>
+          <tr><td>CI build time (amd64)</td><td>17 min</td><td>Native on GitHub Actions runner</td></tr>
+          <tr><td>CI build time (arm64)</td><td>32 min</td><td>QEMU emulation on amd64 runner</td></tr>
+          <tr><td>case.build (arm64 native)</td><td>~100 sec</td><td>Fortran compilation at runtime</td></tr>
+          <tr><td>1-day KONZ simulation</td><td>~60 sec</td><td>Excludes build time</td></tr>
+          <tr><td>Tower data download (12 months)</td><td>&lt;5 sec</td><td>~1.8 MB from Google Cloud</td></tr>
+          <tr><td>Global data download</td><td>0 sec</td><td>Embedded in image; no runtime download</td></tr>
+          <tr><td>Test suite (tier0 + tier1)</td><td>~7 sec</td><td>76 tests</td></tr>
+          <tr><td>Test suite (tier2, includes case.build)</td><td>~100 sec</td><td>14 tests</td></tr>
+        </tbody>
+      </table>
+
+      <p>
+        Full-duration simulation baseline (84 months, Jan 2018 through Dec 2024)
+        has not yet been established. This is a planned next step.
+      </p>
+
       <div class="section-eyebrow">Validation</div>
       <h2>End-to-end simulation</h2>
       <p>The full pipeline has been validated with a 1-day transient simulation at the KONZ (Konza Prairie, Kansas) NEON site. Every step from case creation through archived output completes successfully.</p>
