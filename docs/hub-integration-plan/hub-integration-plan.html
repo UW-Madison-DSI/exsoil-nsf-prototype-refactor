@@ -138,31 +138,49 @@
     <p><strong>Out of scope (follow-on):</strong> VM hosting, multi-user,
     authentication, and S3 credential-rotation security work.</p>
 
-    <h2 id="foundation">Why the rebind is low-risk</h2>
-    <p>The S3 and live-run layouts share one filename convention, so
-    repointing changes where the code looks, not how it parses:</p>
-    <pre><code>S3 today : archive_1/{site}.transient/lnd/hist/{site}.transient.clm2.h1.{YYYY-MM}*.nc
-Live run : {output_root}/{site}.transient/lnd/hist/{site}.transient.clm2.h1.{YYYY-MM}*.nc</code></pre>
-    <p>The soil-profile plotting function already has a local-path branch. The
-    core change is flipping the default source and generalizing the two
-    S3-only readers.</p>
+    <h2 id="foundation">What the rebind actually involves</h2>
+    <p><em>Revised 2026-07-30.</em> This section previously said the two layouts
+    shared one filename convention. Phase 0 compared them against a real KONZ
+    run and found they do not: the current readers match
+    <strong>zero</strong> live files. The rebind is still contained, but it is
+    not a pure prefix swap.</p>
+    <pre><code>S3 / reference : archive_1/{site}.transient/lnd/hist/{site}.transient.clm2.h1.YYYY-MM-DD-00000.nc
+Live run       : {output_root}/archive/lnd/hist/{site}.transient.clm2.h1a.YYYY-MM-DD-01800.nc</code></pre>
+    <p>Three differences, each of which breaks the current filter: the stream
+    token gains a suffix (<code>h1</code> &rarr; <code>h1a</code>,
+    <code>h0</code> &rarr; <code>h0a</code>), the per-site subdirectory
+    disappears, and the daily seconds-of-day field is not
+    <code>00000</code>. The reference copies keep the <em>legacy</em> naming,
+    so the reader must handle both conventions rather than switching to the new
+    one. Two files need the fix, not one:
+    <code>analytics_modules/data_access.py</code> and
+    <code>cesm-tools/site_and_regional/run_neon_v2.py</code>.</p>
+    <p>Still true: the soil-profile plotting function already has a local-path
+    branch, and the core change remains flipping the default source and
+    generalizing the two S3-only readers.</p>
 
     <h2 id="roadmap">Roadmap</h2>
 
     <div class="phase">
-      <div class="phase-head"><span class="num">PHASE 0</span><h3>Data contract + fixtures</h3><span class="est">~0.5 day</span></div>
+      <div class="phase-head"><span class="num">PHASE 0</span><h3>Data contract + fixtures</h3><span class="badge b-done">Done</span><span class="est">~0.5 day</span></div>
       <p>Run KONZ to completion; document the live output path, filename
       convention, variables, and units; stage the five Drive reference copies
       into the repo as the validation oracle.</p>
       <p class="acc"><strong>Done when:</strong> a reviewer can locate a live history file from the documented path without guessing.</p>
+      <p class="acc"><strong>Outcome:</strong> <code>docs/data-contract.md</code> written against a real KONZ run. Surfaced the stream-naming mismatch that reshaped Phase 1. Fixture population from Drive is still outstanding.</p>
     </div>
 
     <div class="phase">
-      <div class="phase-head"><span class="num">PHASE 1</span><h3>Rebind the data-access layer</h3><span class="est">~1 day</span></div>
-      <p>The one real refactor. Add a local reader, route it through a single
-      source-agnostic entry point (env-var selected, local default, S3 opt-in),
-      and remove the hardcoded S3 path. S3 functions stay available.</p>
-      <p class="acc"><strong>Done when:</strong> data loads from a live run with no S3 credentials present; the S3 path still works when explicitly selected.</p>
+      <div class="phase-head"><span class="num">PHASE 1</span><h3>Rebind the data-access layer</h3><span class="badge b-todo">Next</span><span class="est">~1 day</span></div>
+      <p>The one real refactor. First fix the history-file pattern in both
+      <code>data_access.py</code> and <code>run_neon_v2.py</code> so it matches
+      live output at all (stream suffix, date form, path shape) while still
+      reading the legacy-named reference copies. Then add a local reader, route
+      it through a single source-agnostic entry point (env-var selected, local
+      default, S3 opt-in), and remove the hardcoded S3 path. Confirm the xarray
+      engine: <code>scipy</code> suited the NetCDF-3 fixtures but live files may
+      be NetCDF-4. S3 functions stay available.</p>
+      <p class="acc"><strong>Done when:</strong> data loads from a live run with no S3 credentials present, asserted non-empty rather than merely not raising; legacy-named reference copies also read; the S3 path still works when explicitly selected.</p>
     </div>
 
     <div class="phase">
@@ -225,6 +243,8 @@ Live run : {output_root}/{site}.transient/lnd/hist/{site}.transient.clm2.h1.{YYY
         <tr><td>CESM/CTSM simulation runs to completion (KONZ)</td><td><span class="badge b-done">Proven</span></td></tr>
         <tr><td>Native NEON forcing pull (inherited from CTSM)</td><td><span class="badge b-done">Working</span></td></tr>
         <tr><td>Hub notebooks + analytics backend + perturbation tooling</td><td><span class="badge b-done">Exists</span></td></tr>
+        <tr><td>Data contract for live output (Phase 0)</td><td><span class="badge b-done">Done</span></td></tr>
+        <tr><td>Reference copies populated into fixtures</td><td><span class="badge b-todo">To do</span></td></tr>
         <tr><td>Hubs read from live/native output</td><td><span class="badge b-todo">To do</span></td></tr>
         <tr><td>Multi-site validation against reference copies</td><td><span class="badge b-todo">To do</span></td></tr>
         <tr><td>Perturbation scope, tolerance, site list</td><td><span class="badge b-open">Awaiting Jingyi</span></td></tr>

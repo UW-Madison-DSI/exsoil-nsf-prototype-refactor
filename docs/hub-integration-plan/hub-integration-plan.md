@@ -1,7 +1,7 @@
 # Hub Integration Implementation Plan
 
-**Status:** Ready for implementation
-**Date:** 2026-07-10
+**Status:** Phase 0 complete; Phase 1 ready for implementation
+**Date:** 2026-07-10 (revised 2026-07-30 with Phase 0 findings)
 **Author:** Steven Wangen
 **Owner:** Steve / Abe (project reassigned from Maria per Eric Wait, 2026-05-29)
 
@@ -46,23 +46,50 @@ S3 credential-rotation security work.
 - All three Hub notebooks exist: `notebooks/Data_Hub.ipynb` (Hub 1), `notebooks/Modeling_Hub.ipynb` (Hub 2), `notebooks/Design_Hub_v2.ipynb` + `notebooks/pft_perturbation_comparison.ipynb` (Hub 3).
 - Backend exists: `analytics_modules/` (Kalman filter, misfit, perturbation manager, data access).
 - Perturbation tooling exists: `cesm-tools/site_and_regional/run_neon_v2.py` (transform functions + CLI flags).
-- **Everything reads from S3.** `analytics_modules/data_access.py` hardcodes `endpoint_url="https://campus.s3.wisc.edu"`, `COS_ACCESS_KEY_ID/COS_SECRET_ACCESS_KEY`, and the path `archive_1/{site}.transient/lnd/hist/`. Nothing points at native output yet.
+- **Everything reads from S3.** `analytics_modules/data_access.py` hardcodes `endpoint_url="https://campus.s3.wisc.edu"`, `COS_ACCESS_KEY_ID/COS_SECRET_ACCESS_KEY`, and the path `archive_1/{site}.transient/lnd/hist/`. Nothing points at native output yet. Verified still true on 2026-07-30.
+- **The current readers match zero live files** (Phase 0 finding). Both `data_access.py` and `run_neon_v2.py:264` filter on the stale `clm2.h1.{year}` pattern; live output is `clm2.h1a.YYYY-MM-DD-SSSSS`. See the corrected data-convention section below.
 
-## The data convention that makes the rebind clean
+## The data convention — corrected by Phase 0
 
-The S3 and live-run layouts share the **same filename convention** — this is
-what makes the repoint low-risk:
+> **Revised 2026-07-30.** This section previously claimed the S3 and live-run
+> layouts shared the same filename convention. **They do not.** Phase 0
+> compared them against a real KONZ run and found the readers match **zero**
+> live files. The rebind is still low-risk, but it is not a pure prefix swap.
 
-- S3 today: `archive_1/{site}.transient/lnd/hist/{site}.transient.clm2.h1.{YYYY-MM}*.nc`
-- Live run: `{output_root}/{site}.transient/lnd/hist/{site}.transient.clm2.h1.{YYYY-MM}*.nc`
+| | S3 fixtures / reference copies | Live in-container run |
+|---|---|---|
+| Root | `archive_1/{site}.transient/lnd/hist/` | `{output_root}/archive/lnd/hist/` |
+| Per-site subdir | yes (`{site}.transient/`) | **no** |
+| Monthly stream | `h0` | **`h0a`** |
+| Daily stream | `h1` | **`h1a`** |
+| Daily filename | `...clm2.h1.YYYY-MM-DD-00000.nc` | `...clm2.h1a.YYYY-MM-DD-01800.nc` |
+| NetCDF version | 3 (`engine="scipy"`) | unconfirmed, may be 4 |
 
-`plot_soil_profile_timeseries()` in `data_access.py` **already has a local
-branch**. The rebind is flipping the default source and generalizing the two
-S3-only readers.
+Three consequences for Phase 1:
+
+1. **Both the stream token and the date token change.** The current filter
+   `{site}.transient.clm2.h1.{year}` is wrong on two axes, not one.
+2. **The reader must handle both conventions.** The reference copies (the
+   Phase-5 validation oracle) use the *old* plain `h0`/`h1` naming, so the
+   reader cannot simply switch to the new one — it has to read both.
+3. **Two files need the fix**, not one: `analytics_modules/data_access.py`
+   *and* `cesm-tools/site_and_regional/run_neon_v2.py` (~line 264).
+
+Still true and still helpful: `plot_soil_profile_timeseries()` in
+`data_access.py` **already has a local branch**. The rebind is flipping the
+default source and generalizing the two S3-only readers.
+
+Full detail: [`docs/data-contract.md`](../data-contract.md).
 
 ---
 
-## Phase 0 — Data contract + fixtures (~0.5 day)
+## Phase 0 — Data contract + fixtures (~0.5 day) — ✅ DONE
+
+**Status:** Complete (issue #5). `docs/data-contract.md` is written and
+grounded in a real KONZ run; fixtures scaffolding exists at
+`tests/fixtures/reference_output/` with `.nc` payloads gitignored. The 343 MB
+of reference copies are staged locally. Two follow-ups remain open: populating
+the fixtures from Drive, and deciding whether to version `.nc` files via LFS.
 
 **Goal:** pin down where live CESM output lands and stage the validation
 oracle.
@@ -86,26 +113,64 @@ live `.nc` history file from the documented path without guessing.
 **Goal:** one function the notebooks call regardless of source; local by
 default, S3 opt-in.
 
-**File:** `analytics_modules/data_access.py`
+**Files:** `analytics_modules/data_access.py` **and**
+`cesm-tools/site_and_regional/run_neon_v2.py`
 
-1. Add `open_ctsm_hist_local(site, year, output_root, *, input_label="transient")`
-   mirroring `open_ctsm_hist_from_s3()` but reading local files with
-   `glob` + `xr.open_mfdataset` (engine `"scipy"`, same `drop_variables`).
-2. Introduce a single dispatch entry point:
-   `open_ctsm_hist(site, year, *, source=None, ...)`. Resolve `source` from
-   an env var `CTSM_DATA_SOURCE` (`"local"` default, `"s3"` fallback) and a
-   `CTSM_OUTPUT_ROOT` env var for the local path.
-3. In `plot_soil_profile_timeseries()`, remove the hardcoded
-   `sim_path = "s3://clm-demonstration/..."` (line ~280) and derive it from
-   the same source resolution. The local branch already exists; make it the
-   default.
-4. Keep all S3 functions intact but no longer required: `get_s3_client`,
-   `get_storage_options`, `open_ctsm_hist_from_s3` stay for the opt-in path.
-   Do **not** raise on missing `COS_*` creds unless `source="s3"`.
+Task 0 below is new, added from Phase 0's findings. It is the substance of the
+phase — without it the reader returns an empty Dataset rather than an error,
+which is the failure mode most likely to waste an afternoon.
+
+### 0. Fix the history-file pattern (do this first)
+
+Both files currently filter on `{site}.transient.clm2.h1.{year}`, which
+matches zero live files.
+
+- `data_access.py`: generalize the stream token and date form.
+- `run_neon_v2.py` (~line 264): same fix to `fname_prefix`.
+- Support **both** conventions — new-style `h0a`/`h1a` for live output and
+  legacy `h0`/`h1` for the reference copies. A stream parameter defaulting to
+  the daily stream, resolved per source, is enough; do not hardcode either.
+- Daily files are `YYYY-MM-DD-SSSSS` (seconds-of-day, e.g. `01800`), not
+  `{year}`. Glob the seconds field rather than assuming `00000`.
+- Live path is `{output_root}/archive/lnd/hist/` with **no** per-site
+  subdirectory; S3 is `archive_1/{site}.transient/lnd/hist/`. The per-site
+  segment is part of the source-specific path builder, not a shared constant.
+
+### 1. Add the local reader
+
+`open_ctsm_hist_local(site, year, output_root, *, input_label="transient")`,
+mirroring `open_ctsm_hist_from_s3()` but reading local files with `glob` +
+`xr.open_mfdataset` and the same `drop_variables`.
+
+**Verify the engine.** The S3 fixtures were NetCDF-3, hence `engine="scipy"`.
+Live files may be NetCDF-4, where `scipy` fails outright. Confirm against a
+real file and select the engine per source (or let xarray infer) rather than
+copying `"scipy"` forward.
+
+### 2. Add the dispatch entry point
+
+`open_ctsm_hist(site, year, *, source=None, ...)`. Resolve `source` from env
+var `CTSM_DATA_SOURCE` (`"local"` default, `"s3"` fallback) and
+`CTSM_OUTPUT_ROOT` for the local path.
+
+### 3. Repoint the plotting helper
+
+In `plot_soil_profile_timeseries()`, remove the hardcoded
+`sim_path = "s3://clm-demonstration/..."` (~line 280) and derive it from the
+same source resolution. The local branch already exists; make it the default.
+
+### 4. Keep S3 working, but optional
+
+`get_s3_client`, `get_storage_options`, and `open_ctsm_hist_from_s3` stay for
+the opt-in path. Do **not** raise on missing `COS_*` creds unless
+`source="s3"`.
 
 **Acceptance:** with `CTSM_DATA_SOURCE=local` and no COS credentials set,
-`open_ctsm_hist("KONZ", 2018)` returns an xarray Dataset from the live run.
-With `source="s3"` the old path still works.
+`open_ctsm_hist("KONZ", 2018)` returns a **non-empty** xarray Dataset from the
+live run (assert on variable presence and time length, not just a successful
+call — an empty glob otherwise passes silently). Reading a reference copy with
+legacy `h1` naming also returns data. With `source="s3"` the old path still
+works.
 
 ---
 
@@ -201,6 +266,14 @@ closes:
 
 ## Risks
 
+- **Silent empty reads.** A stale glob pattern matches zero files and
+  `open_mfdataset` on an empty list fails late or yields an empty Dataset,
+  which downstream Hub code may treat as "no data for that year" rather than a
+  bug. Assert on variable presence and non-zero time length at the reader
+  boundary, not in the notebooks.
+- **Dual naming conventions persist.** Live output is `h0a`/`h1a`; the
+  reference copies are legacy `h0`/`h1`. This is not transitional — Phase 5
+  validation needs both readable simultaneously.
 - **Non-identical reproduction.** Live runs won't bit-match archived
   reference output; without an agreed tolerance, "validation" is undefined.
   Mitigation: settle decision #2 before Phase 2 sign-off.
