@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Phase Objectives -- ExSOIL NSF Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;700;900&family=Red+Hat+Text:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --uw-red: #C5050C; --uw-red-dark: #9B0000; --uw-black: #121212;
+      --ink: #1C1A19; --ink-soft: #3D3A37; --ink-mute: #5E5852;
+      --bone: #F7F3EC; --cream: #EFE7D6; --mist: #D7D1C4;
+      --white: #FFFFFF; --slate: #2E4756;
+      --green: #2F6B3C; --amber: #9A6B00; --grey: #6B6259;
+      --font-display: 'Red Hat Display', system-ui, sans-serif;
+      --font-body: 'Red Hat Text', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+      --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 20px;
+      --shadow-md: 0 4px 16px rgba(28,26,25,0.08), 0 1px 2px rgba(28,26,25,0.04);
+      --container: 1200px; --gutter: 32px;
+      --ease-out: cubic-bezier(0.2, 0, 0, 1);
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: var(--font-body); font-size: 1.125rem; line-height: 1.65; color: var(--ink); background: var(--bone); -webkit-font-smoothing: antialiased; }
+    .skip-link { position: absolute; left: -9999px; top: 8px; z-index: 10000; background: var(--uw-red); color: var(--white); padding: 12px 20px; border-radius: var(--radius-md); font-family: var(--font-display); font-weight: 700; text-decoration: none; }
+    .skip-link:focus { left: 16px; }
+    .global-bar { background: var(--white); border-bottom: 1px solid var(--mist); padding: 10px var(--gutter); font-family: var(--font-display); font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.02em; }
+    .global-bar a { color: var(--ink); text-decoration: none; }
+    .global-bar a:hover { text-decoration: underline; }
+    .page-header { background: var(--cream); padding: 56px var(--gutter) 48px; }
+    .page-header-inner { max-width: var(--container); margin: 0 auto; }
+    .page-header .eyebrow { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-mute); margin-bottom: 12px; }
+    .page-header h1 { font-family: var(--font-display); font-weight: 900; font-size: clamp(2rem, 4vw, 3rem); line-height: 1.05; letter-spacing: -0.02em; color: var(--ink); margin: 0 0 16px; }
+    .page-header .lead { font-size: 1.25rem; line-height: 1.55; color: var(--ink-soft); max-width: 680px; }
+    .container { max-width: var(--container); margin: 0 auto; padding: 0 var(--gutter); }
+    .narrow { max-width: 820px; margin: 0 auto; }
+    h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); font-weight: 700; color: var(--ink); margin: 0; line-height: 1.15; letter-spacing: -0.02em; }
+    h2 { font-size: 2.25rem; margin-top: 64px; margin-bottom: 16px; }
+    h3 { font-size: 1.5rem; margin-top: 40px; margin-bottom: 12px; letter-spacing: -0.01em; }
+    p { margin: 0 0 16px; }
+    li { margin-bottom: 8px; }
+    strong, b { font-weight: 640; }
+    a { color: var(--slate); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; color: var(--ink); }
+    code { font-family: var(--font-mono); font-size: 0.92em; background: var(--cream); padding: 2px 6px; border-radius: var(--radius-sm); }
+    pre { background: var(--cream); padding: 24px; border-radius: var(--radius-md); overflow-x: auto; font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.5; margin: 16px 0 24px; }
+    pre code { background: transparent; padding: 0; }
+    hr { border: 0; border-top: 1px solid var(--mist); margin: 56px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 1rem; }
+    th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--mist); vertical-align: top; }
+    th { font-family: var(--font-mono); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-mute); border-bottom: 2px solid var(--mist); }
+    tr:last-child td { border-bottom: none; }
+    blockquote { border-left: 3px solid var(--uw-red); padding-left: 20px; margin: 24px 0; color: var(--ink-soft); font-style: italic; }
+    .lead-note { background: var(--white); border: 1px solid var(--mist); border-left: 4px solid var(--uw-red); border-radius: var(--radius-md); padding: 20px 24px; margin: 24px 0; box-shadow: var(--shadow-md); }
+    .lead-note p:last-child { margin-bottom: 0; }
+    .badge { display: inline-block; font-family: var(--font-mono); font-size: 0.7rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+    .b-done { background: rgba(47,107,60,0.12); color: var(--green); }
+    .b-todo { background: rgba(154,107,0,0.14); color: var(--amber); }
+    .b-open { background: rgba(107,98,89,0.14); color: var(--grey); }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 32px 0; }
+    .meta-cell { background: var(--white); border: 1px solid var(--mist); border-radius: var(--radius-md); padding: 16px 18px; }
+    .meta-cell .k { font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-mute); margin-bottom: 6px; }
+    .meta-cell .v { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; color: var(--ink); }
+    .crit { background: var(--white); border: 1px solid var(--mist); border-radius: var(--radius-lg); padding: 8px 28px 12px; margin: 20px 0; box-shadow: var(--shadow-md); }
+    .dsi-footer { background: var(--ink); color: var(--mist); padding: 48px var(--gutter) 32px; margin-top: 96px; font-size: 0.875rem; }
+    .dsi-footer a { color: var(--mist); text-decoration-thickness: 1px; }
+    .dsi-footer a:hover { color: var(--white); }
+    .footer-inner { max-width: var(--container); margin: 0 auto; display: flex; justify-content: space-between; align-items: flex-start; gap: 32px; flex-wrap: wrap; }
+    .footer-brand { font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: var(--white); }
+    .footer-brand .sub { font-weight: 400; font-size: 0.875rem; color: var(--mist); display: block; margin-top: 4px; }
+    .footer-copyright { max-width: var(--container); margin: 24px auto 0; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.8125rem; color: var(--ink-mute); }
+    @media print { .global-bar, .dsi-footer { display: none; } body { background: white; font-size: 10pt; } .container { max-width: none; padding: 0; } pre { white-space: pre-wrap; } .crit, .meta-cell, .lead-note { box-shadow: none; break-inside: avoid; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0ms !important; transition-duration: 0ms !important; } }
+    @media (max-width: 768px) { .container { padding: 0 20px; } .page-header { padding: 32px 20px 28px; } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <div class="global-bar"><a href="https://www.wisc.edu">University of Wisconsin-Madison</a></div>
+  <div class="page-header">
+    <div class="page-header-inner">
+      <div class="eyebrow">ExSOIL NSF Prototype &middot; Phase Objectives</div>
+      <h1>Scientific capability on the working container</h1>
+      <p class="lead">The phase charter: with a working multi-arch CTSM container in hand, deliver the three analysis Hubs on live data, validated across five NEON sites.</p>
+      <p style="font-size: 0.875rem; color: var(--ink-mute); margin-top: 8px;">Data Science Institute, UW-Madison &middot; July 16, 2026</p>
+    </div>
+  </div>
+  <main id="main" tabindex="-1"><div class="container narrow">
+
+    <div class="meta-grid">
+      <div class="meta-cell"><div class="k">Prior phase</div><div class="v">Container ✅</div></div>
+      <div class="meta-cell"><div class="k">This phase</div><div class="v">3 Hubs live</div></div>
+      <div class="meta-cell"><div class="k">Sites</div><div class="v">5 NEON towers</div></div>
+      <div class="meta-cell"><div class="k">Deliverable</div><div class="v">Local Docker MVP</div></div>
+    </div>
+
+    <h2 id="where">Where we are</h2>
+    <p>The infrastructure phase is complete. The project has a self-maintained,
+    multi-architecture (amd64 + arm64) container running <strong>standalone CTSM
+    5.4.043</strong>, and a NEON tower simulation runs end-to-end to completion
+    (KONZ baseline: 83 monthly history files, full 2018-2024 transient run).</p>
+
+    <div class="lead-note">
+      <p><strong>This document marks the phase boundary:</strong> infrastructure
+      (done) → scientific capability (this phase). It states what the phase is
+      trying to achieve and how we will know it succeeded. Execution detail lives
+      in the implementation plan and GitHub epic #11; this is the charter above
+      them.</p>
+    </div>
+
+    <h2 id="objective">Objective</h2>
+    <p>Deliver the three analysis <strong>Hubs</strong> running against
+    <strong>live/native data</strong> on the working container, validated across
+    <strong>5 NEON sites</strong>. Each Hub realizes one capability from Jingyi's
+    NSF proposal:</p>
+    <table>
+      <thead><tr><th>Hub</th><th>Capability</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><strong>1 — Data Analysis</strong></td><td>Data access</td><td>Explore NEON + CTSM data (plots, histograms, soil profiles)</td></tr>
+        <tr><td><strong>2 — Modeling</strong></td><td>Model evaluation</td><td>Evaluate fit and calibrate via a Kalman filter (target: <strong>GPP</strong>)</td></tr>
+        <tr><td><strong>3 — Experimentation</strong></td><td>Scenario analysis</td><td>Perturb an input, run CTSM on perturbed + unperturbed, compare via t-test</td></tr>
+      </tbody>
+    </table>
+    <p>The Hubs, their analytics backend, and the perturbation tooling already
+    exist; this phase repoints them from the original S3 fixtures to live/native
+    data and validates them. It is a <strong>data-rebind + validation</strong>
+    effort, not a redesign.</p>
+    <p><strong>Sample sites (5):</strong> KONZ (baseline), ABBY, CPER, TALL, CLBJ.</p>
+
+    <h2 id="success">Success criteria</h2>
+    <p>This phase is done when:</p>
+    <ol>
+      <li>All three Hubs run <strong>end-to-end on live/in-container data</strong> with no manual data-staging steps.</li>
+      <li>Each Hub runs <strong>clean across all 5 sample sites</strong> from a fresh container pull.</li>
+      <li>Hub outputs <strong>validate against the reference copies</strong> within an agreed tolerance (shape / plausible-range, not bit-level — see constraints).</li>
+      <li>Hub 2's Kalman/misfit step evaluates model <strong>GPP against observed GPP</strong> (pending an observation source).</li>
+      <li>The workflow is documented so a new user can run all three Hubs from the getting-started guide.</li>
+    </ol>
+
+    <h2 id="scope">Scope</h2>
+    <div class="crit">
+      <h3 style="margin-top:20px;">In scope (MVP)</h3>
+      <ul>
+        <li>Local Docker image, <strong>single-user, no authentication</strong></li>
+        <li>The three Hubs on the 5 sample sites, live/native data</li>
+        <li>Precipitation perturbation for Hub 3 (fully codified today)</li>
+      </ul>
+      <h3>Out of scope (follow-on)</h3>
+      <ul>
+        <li>VM hosting and multi-user access</li>
+        <li>User/password authentication and S3 credential-rotation security work</li>
+        <li>PFT / soil-type / temperature perturbations (unless promoted by Jingyi)</li>
+      </ul>
+    </div>
+
+    <h2 id="decisions">Open decisions (need Jingyi)</h2>
+    <table>
+      <thead><tr><th>Decision</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Perturbation variable scope</strong> — precip-only for MVP, with PFT / soil / temperature as follow-ons?</td><td><span class="badge b-open">Open</span></td></tr>
+        <tr><td><strong>Validation tolerance</strong> — how close must a live run match the references to pass? (shape/range framing)</td><td><span class="badge b-open">Open</span></td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="constraints">Dependencies &amp; known constraints</h2>
+    <table>
+      <thead><tr><th>Item</th><th>Implication</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Observed GPP for Hub 2</strong></td><td>Reference copies are <strong>model output only</strong> — no NEON observations. Hub 2's misfit needs observed GPP, sourced separately (NEON API / <code>evaluation_files</code> / NCAR eval files). Main external dependency.</td></tr>
+        <tr><td><strong>Reference copies = older model generation</strong></td><td>Legacy <code>h1</code>/<code>h0</code> naming, 2018-2022 coverage. A shape / plausible-range oracle, not exact ground truth. Confirm version with Maria.</td></tr>
+        <tr><td><strong>Model vs observation not exact by construction</strong></td><td>Model GPP is "gross"; tower GPP is derived from net flux via partitioning. Even a perfect model won't match exactly — fit-quality over exact agreement.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="discrepancies">Scope discrepancies to reconcile</h2>
+    <p>While mapping <code>communication-internal</code> against the code, three
+    features are described (two marked "done") that do not match what is actually
+    implemented. These are <strong>scope decisions for Jingyi</strong>, not
+    silent omissions — flagged so they are not later read as delivered:</p>
+    <table>
+      <thead><tr><th>Feature (per doc)</th><th>Actual state</th><th>Decision / action</th></tr></thead>
+      <tbody>
+        <tr><td><strong>ILAMB metrics</strong> <span class="badge b-open">marked done</span></td><td>No ILAMB in code; Hub 2 uses a custom fit framework (bias, R², residuals)</td><td>Accept custom or build real ILAMB — #13</td></tr>
+        <tr><td><strong>5-step EnKF loop</strong> <span class="badge b-open">marked done</span></td><td>Code has a simple/scalar Kalman filter; no ensemble or cycle</td><td>Accept simple KF or build true EnKF — #14</td></tr>
+        <tr><td><strong>Perturbation: PFT, soil, temperature</strong></td><td>Only precipitation is codified today</td><td>MVP = precip; rest deferred (#3 soil type)</td></tr>
+        <tr><td><strong>Observed data for evaluation</strong></td><td>Reference copies are model-output only</td><td>Source observed GPP — #12 (blocks Phase 3)</td></tr>
+      </tbody>
+    </table>
+    <p>The three-hub integration itself (Phases 0-5) is concretely planned and
+    tracked; these four items are the remaining gaps between the source doc and
+    the plan.</p>
+
+    <h2 id="related">Related documents</h2>
+    <ul>
+      <li><strong>Hub integration implementation plan</strong> — <code>docs/hub-integration-plan/</code> — phases, tasks, acceptance criteria</li>
+      <li><strong>Data contract</strong> — <code>docs/data-contract.md</code> — live output schema + reference-copy evaluation</li>
+      <li><strong>GitHub epic #11</strong> — execution tracker (phase issues #5–#10)</li>
+      <li><strong><code>docs/communication-internal.docx</code></strong> — the July 9 decisions that set this phase's direction</li>
+    </ul>
+
+  </div></main>
+  <footer class="dsi-footer">
+    <div class="footer-inner">
+      <div><div class="footer-brand">Data Science Institute<span class="sub">University of Wisconsin-Madison</span></div></div>
+      <div><a href="mailto:srwangen@wisc.edu">srwangen@wisc.edu</a></div>
+    </div>
+    <div class="footer-copyright">&copy; 2026 Board of Regents of the University of Wisconsin System.</div>
+  </footer>
+</body>
+</html>

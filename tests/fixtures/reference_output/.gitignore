@@ -1,0 +1,2 @@
+# Reference NetCDF payloads are not committed (binary/large; use Git LFS if needed)
+*.nc

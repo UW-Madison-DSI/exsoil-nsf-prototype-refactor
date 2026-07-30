@@ -5,3 +5,8 @@
 *.pyc
 .venv/
 .env
+
+# Reference CTSM output copies (validation oracle) — large NetCDF, not versioned.
+# See docs/data-contract.md and tests/fixtures/reference_output/README.md
+/archive/
+*.nc
