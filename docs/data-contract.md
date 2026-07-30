@@ -45,15 +45,37 @@ in `run/`; the full time series lives in the archive.
 
 ### Relationship to the old S3 layout
 
-| | Path |
+> **Corrected 2026-07-30.** This section originally listed a single live
+> layout. There are **three**, because the archive root depends on which
+> wrapper produced the run. The layout documented below as "live" is the one
+> `run_tower` produces, which is what the KONZ baseline used — but the Hubs
+> drive `run_neon_v2.py`, which archives somewhere else entirely.
+
+| Producer | Path |
 |---|---|
 | **S3 (old fixtures)** | `s3://clm-demonstration/archive_1/{site}.transient/lnd/hist/` |
-| **Live (native)** | `{output_root}/archive/lnd/hist/` |
+| **Reference copies (as delivered)** | `archive/archive/{site}.transient/lnd/hist/` |
+| **`run_tower`** (KONZ baseline) | `{output_root}/archive/lnd/hist/` |
+| **`run_neon_v2.py`** (what the Hubs use) | `{dirname(base_case_root)}/archive/{site}/{control\|VAR_VALUE}/lnd/hist/` |
 
-Two differences Phase 1 must handle: the bucket prefix `archive_1` becomes the
-local `archive`, and the old layout nests history under a per-site
-`{site}.transient/` subdirectory while the single-case live archive does not.
-`DOUT_S_ROOT` is the CIME variable that controls the archive root.
+`DOUT_S_ROOT` is the CIME variable controlling the archive root.
+`run_neon_v2.py:1086-1089` overrides it per experiment:
+
+```python
+archroot = os.path.join(os.path.dirname(base_case_root), "archive")
+exp_name = f"{transform_var}_{transform_value}" if transform_var else "control"
+archroot_exp = os.path.join(archroot, self.name, exp_name)
+case.set_value("DOUT_S_ROOT", archroot_exp)
+```
+
+Two consequences. The root is derived from `base_case_root`, **not** from
+`output_root`, so they are not interchangeable. And the `control` vs
+`PRECTmms_1.2` segment is exactly the run separation Phase 4 needs in order to
+compare a perturbed run against an unperturbed one — it already exists, and no
+other document mentions it.
+
+Rather than making callers pick, `analytics_modules.find_ctsm_hist_files()`
+probes all of these layouts and both stream naming conventions.
 
 ## 2. History streams
 
