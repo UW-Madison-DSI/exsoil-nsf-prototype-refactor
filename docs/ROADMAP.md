@@ -1,9 +1,20 @@
 # Roadmap
 
 Tracks completed work, current status, and planned next steps for the
-ExSOIL NSF Prototype container infrastructure.
+ExSOIL NSF Prototype.
 
-Last updated: 2026-06-05
+The project crossed a phase boundary in July 2026: the **infrastructure
+phase is complete**, and work is now in the **scientific-capability
+phase** (getting the three analysis Hubs running on live/native data).
+Execution for that phase is planned and tracked separately:
+
+- Charter: [docs/phase-objectives/](phase-objectives/phase-objectives.md)
+- Implementation plan: [docs/hub-integration-plan/](hub-integration-plan/hub-integration-plan.md)
+- Data contract: [docs/data-contract.md](data-contract.md)
+- Execution tracker: GitHub epic **#11** (phase issues #5-#10, scope decisions #12-#14)
+- Shareable status: [docs/project-summary/hub-integration-progress-report.md](project-summary/hub-integration-progress-report.md)
+
+Last updated: 2026-07-30
 
 ---
 
@@ -103,6 +114,24 @@ First successful NEON tower site simulation in the container.
 | Add mpi-serial mpirun safety net | Done | `config_machines.xml` |
 | 1-day KONZ transient simulation | Done | 31 variables, 48 time steps, valid NetCDF output |
 | xarray reads CLM output (FSH, TSOI, H2OSOI) | Done | Soil temp, moisture, sensible heat flux |
+| Full-duration KONZ run (2018-2024) | Done | 83 monthly history files, 337 s model time |
+| Performance baseline documented | Done | [docs/benchmarks/konz-performance-baseline.md](benchmarks/konz-performance-baseline.md) |
+
+### Hub integration planning + Phase 0 (July 2026)
+
+Phase boundary from infrastructure to scientific capability. Target:
+the three Hubs (Data Analysis, Modeling, Experimentation) running on
+live/native data across 5 NEON sites (KONZ, ABBY, CPER, TALL, CLBJ).
+This is a data-rebind and validation effort, not a redesign.
+
+| Milestone | Status | Reference |
+|-----------|--------|-----------|
+| Phase objectives / charter | Done | [docs/phase-objectives/](phase-objectives/phase-objectives.md) |
+| Implementation plan (6 phases) | Done | [docs/hub-integration-plan/](hub-integration-plan/hub-integration-plan.md) |
+| GitHub epic + phase issues | Done | Epic #11, issues #5-#10 |
+| **Phase 0** — data contract | Done | [docs/data-contract.md](data-contract.md) |
+| **Phase 0** — fixtures scaffolding | Done | `tests/fixtures/reference_output/` (`.nc` payloads gitignored) |
+| Reference copies received + evaluated | Done | 343 MB, 5 sites, staged locally |
 
 ---
 
@@ -117,9 +146,24 @@ The container can:
 - Read simulation output with xarray for analysis
 
 The full pipeline (pre-download, case.build, case.submit, archive,
-xarray analysis) has been validated at KONZ with a 1-day transient run.
-NEON tower forcing data is available through September 2024 for KONZ
-(84 monthly files).
+xarray analysis) has been validated at KONZ with a full 2018-2024
+transient run (83 monthly history files). NEON tower forcing data is
+available through December 2024 for KONZ (84 monthly files; use
+`STOP_N=83` — see the performance baseline for the boundary gotcha).
+
+**Infrastructure is done. The active work is hub integration**, and
+none of Phases 1-5 have started: `analytics_modules/data_access.py`
+still reads exclusively from S3.
+
+### Known blocker for Phase 1
+
+Live CTSM output uses new-style suffixed streams (`h0a` monthly, `h1a`
+daily) under `archive/lnd/hist/`, but both `analytics_modules/data_access.py`
+and `cesm-tools/site_and_regional/run_neon_v2.py` (~lines 263-264) still
+filter on the stale `archive_1/...clm2.h1.{year}` pattern, so they match
+**zero** live files. Phase 1 must fix the stream token *and* the date
+format in both files, not just the directory. Detail in the
+[data contract](data-contract.md).
 
 ---
 
@@ -174,21 +218,41 @@ runs. The NEON tower data is trivial.
 | ~~Multi-arch CI/CD~~ | ~~High~~ | Done. Split per-platform builds, manifest merge. |
 | ~~amd64 build validation~~ | ~~Medium~~ | Done. Built and pushed via CI (17 min native). |
 | ~~Publish to GHCR~~ | ~~Medium~~ | Done. `v2.0.0-rc4` with both architectures. |
-| **Review use cases with Jingyi** | High | Confirm sites, periods, variables, workflow target (diagnostic vs calibration). |
-| **Validate science notebooks** | High | Test Modeling_Hub, Design_Hub_v2 against real CLM 6.0 output. Check variable availability. |
-| **Full-duration simulation** | Medium | Run KONZ for full 84 months (2018-2024) to establish runtime baseline. |
-| **PR and merge** | Medium | Open PR from `feature/arm64-multiarch-rebuild` to `dev` or `main`. |
+| ~~Review use cases with Jingyi~~ | ~~High~~ | Done. Settled in the July 9 `communication-internal` thread: native/live data, GPP as the Kalman target, 5 sites, 4-step Hub 3 loop. |
+| ~~Full-duration simulation~~ | ~~Medium~~ | Done. Full 2018-2024 KONZ run, 83 monthly files. |
+| **Phase 1: rebind data-access layer** | High | Issue #6. Local reader + source-agnostic `open_ctsm_hist()`; fix the `h1`→`h1a` naming. Not blocked by the pending decisions. ~1 day. |
+| **Get scope decisions to Jingyi** | High | Issues #12-#14 plus perturbation scope and validation tolerance. #12 blocks Phase 3. |
+| **PR and merge** | Medium | Open PR from `feature/arm64-multiarch-rebuild` to `dev`. 63 commits ahead of `main`, no PR open. |
 | **File ESCOMP GitHub issue** | Low | Report the mpi-serial conflict and data server gap. Draft at `docs/ctsm-issue-draft.md`. |
 
 ### Medium-term
 
 | Item | Priority | Description |
 |------|----------|-------------|
-| ~~End-to-end NEON simulation test~~ | ~~High~~ | Done. 1-day KONZ transient produces 31-variable CLM output. |
-| **Modeling_Hub notebook** | High | Connect the notebook to either live simulation output or NCAR's pre-computed output (available for 45 sites at storage.neonscience.org). |
-| **Design_Hub_v2 validation** | Medium | Test perturbation experiments end-to-end. |
-| **NEON observation pipeline** | Medium | Implement `download_eval_files` to fetch processed tower observations for model-data comparison. |
+Hub work is tracked in detail by the
+[implementation plan](hub-integration-plan/hub-integration-plan.md) and
+epic #11. Summarized here:
+
+| Item | Priority | Description |
+|------|----------|-------------|
+| ~~End-to-end NEON simulation test~~ | ~~High~~ | Done. Full KONZ transient produces valid CLM output. |
+| **Phase 2: Hub 1 (Data Analysis)** | High | Issue #7. Simplest Hub first, per Maria's recommendation. ~0.5 day. |
+| **Phase 3: Hub 2 (Modeling / Kalman)** | High | Issue #8. Blocked on an observed-GPP source (#12). ~1 day. |
+| **Phase 4: Hub 3 (Experimentation)** | Medium | Issue #9. Precip perturbation → two runs → t-test. ~1.5 days. |
+| **Phase 5: multi-site validation** | Medium | Issue #10. All 3 Hubs × 5 sites from a fresh pull. ~1 day. |
+| **NEON observation pipeline** | Medium | Issue #12. Source observed GPP: NEON API, `evaluation_files`, or NCAR eval files. |
 | **Image size optimization** | Low | Investigate `--filter=blob:none` clone, BuildKit cache mounts. |
+
+### Scope gaps to reconcile
+
+`communication-internal` marks two features "done" that are simpler
+stand-ins in the code. Flagged so they are not later read as delivered:
+
+| Feature | Doc says | Actual | Issue |
+|---------|----------|--------|-------|
+| ILAMB benchmarking | Done | Custom fit metrics (bias, R², residuals) | #13 |
+| 5-step EnKF loop | Done | Simple/scalar Kalman filter, no ensemble | #14 |
+| PFT / soil / temperature perturbation | Listed | Only precipitation is codified | #3 |
 
 ### Long-term
 
