@@ -32,6 +32,16 @@ from .data_access import (
     list_objects_under_prefix,
     download_keys,
     open_ctsm_hist_from_s3,
+)
+
+# Plotting, moved out of data_access into visualization.py. Re-exported so
+# `from analytics_modules import plot_soil_profile_timeseries` keeps working.
+#
+# Imported eagerly, matching the rest of this file. That means importing the
+# package still loads matplotlib -- as does neon_eval_utils above, so making
+# only this one lazy would change nothing. Deferring both is tracked
+# separately.
+from .visualization import (
     plot_soil_profile_timeseries,
     truncate_colormap,
 )
