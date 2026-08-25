@@ -54,7 +54,7 @@ in `run/`; the full time series lives in the archive.
 | Producer | Path |
 |---|---|
 | **S3 (old fixtures)** | `s3://clm-demonstration/archive_1/{site}.transient/lnd/hist/` |
-| **Reference copies (as delivered)** | `archive/archive/{site}.transient/lnd/hist/` |
+| **Reference copies (as delivered)** | `reference-output/{site}.transient/lnd/hist/` |
 | **`run_tower`** (KONZ baseline) | `{output_root}/archive/lnd/hist/` |
 | **`run_neon_v2.py`** (what the Hubs use) | `{dirname(base_case_root)}/archive/{site}/{control\|VAR_VALUE}/lnd/hist/` |
 
@@ -153,9 +153,14 @@ float time(time) ;
 ```
 
 Also present: `mcdate` (int `YYYYMMDD`), `mcsec` (seconds of day),
-`time_bounds(time, nbnd)`. Files are NetCDF; open with xarray. The S3 fixtures
-were NetCDF-3 (`engine="scipy"`); confirm the engine works for live files too
-during Phase 1 (they may be NetCDF-4).
+`time_bounds(time, nbnd)`. Files are NetCDF; open with xarray.
+
+**Engine — resolved in Phase 1, and not what this document originally
+guessed.** Live output is **CDF-5** (magic bytes `CDF\x05`), verified on disk;
+the reference copies are CDF-2 (`CDF\x02`). `scipy` reads CDF-1/2 only, so it
+fails on live files, and `h5netcdf` fails too because CDF-5 is not HDF5.
+`netcdf4` reads both. `analytics_modules.data_access` selects the engine per
+file from its magic number rather than assuming one.
 
 ## 6. Reproducing / locating a file
 
@@ -191,7 +196,7 @@ variables:
 ## 8. Reference copies (validation oracle)
 
 The 5-site reference copies (Maria's S3/Drive set) are now staged locally at
-`archive/archive/{SITE}.transient/lnd/hist/` (gitignored — 343 MB). Evaluated
+`reference-output/{SITE}.transient/lnd/hist/` (gitignored — 343 MB). Evaluated
 2026-07-15:
 
 | Property | Reference copies | Live container output (§1-7) |

@@ -35,7 +35,7 @@ requires_live = pytest.mark.skipif(
     reason="set CTSM_TEST_LIVE_ROOT to a completed CTSM run",
 )
 requires_reference = pytest.mark.skipif(
-    not list(Path(REFERENCE_ROOT).glob("archive/archive/*/lnd/hist")),
+    not list(Path(REFERENCE_ROOT).glob("reference-output/*/lnd/hist")),
     reason="reference copies not staged (see tests/fixtures/reference_output/README.md)",
 )
 

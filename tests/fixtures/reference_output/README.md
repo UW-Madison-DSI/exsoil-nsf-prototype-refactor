@@ -10,7 +10,7 @@ and `docs/hub-integration-plan/hub-integration-plan.md` for how they are used.
 Staged locally (2026-07-15) at the repo root, **gitignored** (343 MB):
 
 ```
-archive/archive/{SITE}.transient/lnd/hist/
+reference-output/{SITE}.transient/lnd/hist/
 ├── {SITE}.transient.clm2.h0.YYYY-MM.nc            # monthly (51 files/site)
 └── {SITE}.transient.clm2.h1.YYYY-MM-DD-00000.nc   # daily (~1552 files/site)
 ```
@@ -49,7 +49,7 @@ NetCDF-3 (`engine="scipy"`), plain `h0`/`h1` naming.
 
 Because the copies use the old plain-`h1` naming, the **current**
 `data_access.py` reader matches them with only a path change (S3 →
-`archive/archive/{site}.transient/lnd/hist/`). The `h1`→`h1a` fix is needed
+`reference-output/{site}.transient/lnd/hist/`). The `h1`→`h1a` fix is needed
 only for reading *live* container output. See `docs/data-contract.md` §8.
 
 ## Local live sample (KONZ)

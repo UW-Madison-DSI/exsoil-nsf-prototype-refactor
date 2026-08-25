@@ -371,7 +371,7 @@ def _candidate_hist_dirs(root: Path, neon_site: str, input_label: str) -> List[P
         root / "archive" / "lnd" / "hist",                      # run_tower
         root / "archive" / case / "lnd" / "hist",               # S3 shape, staged locally
         root / case / "lnd" / "hist",
-        root / "archive" / "archive" / case / "lnd" / "hist",   # reference copies as delivered
+        root / "reference-output" / case / "lnd" / "hist",      # validation oracle
     ]
     # run_neon_v2 writes archive/<site>/<control|VAR_VALUE>/lnd/hist
     globbed = sorted(root.glob(f"archive/{neon_site}/*/lnd/hist"))
