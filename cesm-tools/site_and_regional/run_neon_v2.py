@@ -59,7 +59,7 @@ import argparse
 import datetime
 from getpass import getuser
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Third-party – numeric / IO
@@ -67,18 +67,18 @@ from typing import List, Optional
 import numpy as np
 import pandas as pd
 import xarray as xr
-import fsspec
 import requests
-import matplotlib
-import matplotlib.pyplot as plt
-import tqdm
 
 # ---------------------------------------------------------------------------
 # AWS / S3
 # ---------------------------------------------------------------------------
-import boto3
-from botocore.config import Config
-from botocore.exceptions import ClientError
+# Shared with the analysis notebooks rather than duplicated here. Both this
+# script and the package are on PYTHONPATH in the container
+# (Dockerfile:149,152), so there is one implementation, not two.
+from analytics_modules.data_access import (
+    get_s3_client,
+    list_objects_under_prefix,
+)
 
 # ---------------------------------------------------------------------------
 # CTSM / CIME internals
@@ -110,86 +110,6 @@ logger = logging.getLogger(__name__)
 # ===========================================================================
 # SECTION 1 – S3 helpers
 # ===========================================================================
-
-def get_s3_client(
-    endpoint_url: str = "https://campus.s3.wisc.edu",
-) -> "boto3.client":
-    """
-    Build a boto3 S3 client for a non-AWS endpoint.
-
-    Credentials are read from environment variables:
-        COS_ACCESS_KEY_ID      – access key
-        COS_SECRET_ACCESS_KEY  – secret key
-    """
-    return boto3.client(
-        "s3",
-        aws_access_key_id=os.getenv("COS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.getenv("COS_SECRET_ACCESS_KEY"),
-        endpoint_url=endpoint_url,
-        config=Config(s3={"addressing_style": "path"}),
-    )
-
-
-def get_storage_options(
-    endpoint_url: str = "https://campus.s3.wisc.edu",
-) -> dict:
-    """
-    Build fsspec / s3fs storage-options dict for non-AWS S3.
-    """
-    key = os.getenv("COS_ACCESS_KEY_ID")
-    secret = os.getenv("COS_SECRET_ACCESS_KEY")
-    if not key or not secret:
-        raise RuntimeError(
-            "Missing COS credentials. "
-            "Set COS_ACCESS_KEY_ID and COS_SECRET_ACCESS_KEY environment variables."
-        )
-    return {
-        "key": key,
-        "secret": secret,
-        "client_kwargs": {"endpoint_url": endpoint_url},
-        "config_kwargs": {"s3": {"addressing_style": "path"}},
-    }
-
-
-def test_s3_connection(s3, bucket_name: str, prefix: str) -> bool:
-    """Verify connectivity to an S3 bucket/prefix using list_objects_v2."""
-    try:
-        resp = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix, MaxKeys=1)
-        if "Contents" in resp:
-            print(f"✅  Connected to {bucket_name}/{prefix}")
-        else:
-            print(f"⚠️  Connected but prefix is empty: {bucket_name}/{prefix}")
-        return True
-    except ClientError as exc:
-        print("❌  S3 access failed")
-        print(exc)
-        return False
-
-
-def list_objects_under_prefix(
-    s3,
-    bucket_name: str,
-    prefix: str,
-    dry_run: bool = False,
-) -> List[str]:
-    """Paginate through all objects under a given S3 prefix and return their keys."""
-    keys: List[str] = []
-    token = None
-    while True:
-        kwargs = {"Bucket": bucket_name, "Prefix": prefix}
-        if token:
-            kwargs["ContinuationToken"] = token
-        resp = s3.list_objects_v2(**kwargs)
-        if "Contents" in resp:
-            keys.extend(obj["Key"] for obj in resp["Contents"])
-        if resp.get("IsTruncated"):
-            token = resp["NextContinuationToken"]
-        else:
-            break
-        if dry_run:
-            break
-    return sorted(keys)
-
 
 def download_s3_forcing(
     bucket_name: str,
@@ -240,190 +160,6 @@ def download_s3_forcing(
 
     print(f"[{site_code}] S3 download complete → {local_dest}")
     return str(dest)
-
-
-def open_ctsm_hist_from_s3(
-    input_label: str,
-    s3_client,
-    bucket_name: str,
-    neon_site: str,
-    year: str,
-    *,
-    storage_options: Optional[dict] = None,
-    endpoint_url: str = "https://campus.s3.wisc.edu",
-    engine: str = "scipy",
-    decode_times: bool = True,
-    combine: str = "by_coords",
-    parallel: bool = False,
-    chunks=None,
-    preview_n: int = 10,
-) -> xr.Dataset:
-    """Open CTSM history NetCDF files directly from S3 as an xarray Dataset."""
-    if input_label == "transient":
-        sim_path = f"archive_1/{neon_site}.transient/lnd/hist/"
-        fname_prefix = f"{neon_site}.transient.clm2.h1.{year}"
-    elif input_label == "evaluation":
-        sim_path = f"evaluation_files/{neon_site}/{neon_site}_eval_{year}"
-        fname_prefix = ""
-    else:
-        raise ValueError(f"Unknown input_label: {input_label!r}")
-
-    keys = list_objects_under_prefix(s3_client, bucket_name, sim_path)
-    sim_keys = sorted(
-        k for k in keys
-        if k.startswith(sim_path + fname_prefix) and k.endswith(".nc")
-    )
-
-    print(f"Simulation files found: {len(sim_keys)}")
-    if preview_n and sim_keys:
-        for k in sim_keys[:preview_n]:
-            print(" ", k)
-
-    if not sim_keys:
-        raise RuntimeError(
-            f"No NetCDF files for site={neon_site}, year={year} "
-            f"under s3://{bucket_name}/{sim_path}"
-        )
-
-    sim_uris = [f"s3://{bucket_name}/{k}" for k in sim_keys]
-    if storage_options is None:
-        storage_options = get_storage_options(endpoint_url=endpoint_url)
-
-    ofiles = fsspec.open_files(sim_uris, mode="rb", **storage_options)
-    fileobjs = [f.open() for f in ofiles]
-
-    t0 = time.time()
-    try:
-        ds = xr.open_mfdataset(
-            fileobjs,
-            engine=engine,
-            decode_times=decode_times,
-            combine=combine,
-            parallel=parallel,
-            chunks=chunks,
-        )
-    finally:
-        for fo in fileobjs:
-            try:
-                fo.close()
-            except Exception:
-                pass
-
-    print(f"Opened dataset in {time.time() - t0:.2f}s")
-    return ds
-
-
-# ===========================================================================
-# SECTION 2 – Visualisation helper
-# ===========================================================================
-
-def _truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
-    """Return a sub-range of an existing matplotlib colormap."""
-    import matplotlib.colors as mcolors
-    new_cmap = mcolors.LinearSegmentedColormap.from_list(
-        f"trunc({cmap.name},{minval:.2f},{maxval:.2f})",
-        cmap(np.linspace(minval, maxval, n)),
-    )
-    return new_cmap
-
-
-def plot_soil_profile_timeseries(
-    neon_site: str,
-    var: str,
-    year=None,
-    *,
-    endpoint_url: str = "https://campus.s3.wisc.edu",
-    storage_options: Optional[dict] = None,
-):
-    """Quick contour-fill visualisation of a soil profile variable vs. time."""
-    t0 = time.time()
-    plt.rcParams["font.weight"] = "bold"
-    plt.rcParams["axes.labelweight"] = "bold"
-    matplotlib.rc("font", **{"weight": "bold", "size": 15})
-
-    year_str = str(year) if year is not None else "*"
-    sim_path = f"s3://clm-demonstration/archive_1/{neon_site}.transient/lnd/hist/"
-    case_name = f"{neon_site}.transient.clm2"
-
-    _p = sim_path[len("s3://"):]
-    bucket_name, _, prefix = _p.partition("/")
-    if prefix and not prefix.endswith("/"):
-        prefix += "/"
-
-    s3_client = get_s3_client(endpoint_url=endpoint_url)
-    if storage_options is None:
-        storage_options = get_storage_options(endpoint_url=endpoint_url)
-
-    keys = list_objects_under_prefix(s3_client, bucket_name, prefix)
-    fname_prefix = f"{case_name}.h1.{year_str}" if year else f"{case_name}.h1."
-    sim_keys = sorted(
-        k for k in keys
-        if k.startswith(prefix + fname_prefix) and k.endswith(".nc")
-    )
-
-    print(f"Simulation files: {len(sim_keys)}")
-    if not sim_keys:
-        raise RuntimeError(f"No files found for {neon_site}, year={year_str}")
-
-    sim_uris = [f"s3://{bucket_name}/{k}" for k in sim_keys]
-    drop_vars = [
-        "ZSOI", "DZSOI", "WATSAT", "SUCSAT", "BSW",
-        "HKSAT", "ZLAKE", "DZLAKE", "PCT_SAND", "PCT_CLAY",
-    ]
-
-    ds_all = []
-    t1 = time.time()
-    for uri in tqdm.tqdm(sim_uris, desc="Reading files"):
-        with fsspec.open(uri, mode="rb", **storage_options) as fo:
-            ds_tmp = xr.open_dataset(fo, engine="scipy", drop_variables=drop_vars)
-            ds_all.append(ds_tmp.isel(time=24).load())
-
-    ds = xr.concat(ds_all, dim="time")
-    print(f"Read {len(sim_uris)} files in {time.time() - t1:.2f}s")
-
-    if year is not None:
-        try:
-            ds = ds.sel(time=str(year))
-        except (KeyError, ValueError):
-            print(f"Warning: could not subset to year={year}; using all data")
-
-    if var == "TSOI":
-        data = ds[var].isel(levgrnd=slice(0, 9))
-        x = data.time.values
-        y = -data.levgrnd.values
-        Z = (data[:, :, 0].values.transpose()) - 273.15
-        cmap = "YlOrRd"
-        var_name, var_unit = "Soil Temperature", "[°C]"
-
-    elif var == "H2OSOI":
-        data = ds[var].isel(levsoi=slice(0, 15))
-        x = data.time.values
-        y = -data.levsoi.values
-        Z = data[:, :, 0].values.transpose()
-        cmap = _truncate_colormap(plt.get_cmap("gist_earth_r"), 0.15, 0.9)
-        var_name, var_unit = "Soil Moisture", "[mm³/mm³]"
-
-    else:
-        raise ValueError("var must be 'TSOI' or 'H2OSOI'")
-
-    X, Y = np.meshgrid(x, y)
-    fig, ax = plt.subplots(figsize=(15, 5), facecolor="w")
-    cs = ax.contourf(X, Y, Z, cmap=cmap, extend="both")
-    plt.xticks(rotation=30)
-    ax.set_ylabel("Soil Depth [m]")
-    ax.set_xlabel("Time")
-    year_label = f" ({year})" if year else ""
-    ax.set_title(
-        f"Time-Series of {var_name} Profile at {neon_site}{year_label}",
-        fontweight="bold",
-    )
-    cbar = fig.colorbar(cs, ax=ax, shrink=0.9)
-    cbar.ax.set_ylabel(f"{var_name} {var_unit}")
-    plt.tight_layout()
-    plt.show()
-
-    print(f"Total time: {time.time() - t0:.2f}s")
-    return ds
 
 
 # ===========================================================================

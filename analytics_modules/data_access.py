@@ -92,7 +92,7 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
 # 1. Create S3 client
 # ============================================================
 
-def get_s3_client():
+def get_s3_client(endpoint_url: str = "https://campus.s3.wisc.edu"):
     """Build a boto3 client for the UW campus S3 endpoint.
 
     Credentials come from COS_ACCESS_KEY_ID / COS_SECRET_ACCESS_KEY. boto3
@@ -106,7 +106,7 @@ def get_s3_client():
         "s3",
         aws_access_key_id=os.getenv("COS_ACCESS_KEY_ID"),
         aws_secret_access_key=os.getenv("COS_SECRET_ACCESS_KEY"),
-        endpoint_url="https://campus.s3.wisc.edu",
+        endpoint_url=endpoint_url,
         config=Config(s3={"addressing_style": "path"}),
     )
 
