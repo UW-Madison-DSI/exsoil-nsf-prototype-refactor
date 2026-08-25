@@ -546,34 +546,41 @@ def plot_soil_profile_timeseries(neon_site, var, year=None, *,
                                  source=None,
                                  output_root=None,
                                  stream: str = "daily",
+                                 stream_token: str = "h1",
                                  input_label: str = "transient",
                                  endpoint_url="https://campus.s3.wisc.edu",
                                  storage_options=None):
-    """
-    Function for quick visualization of soil profile vs. time.
+    """Plot a soil profile against time and return the dataset behind it.
+
+    Samples one timestep per file at roughly midday, so it is meant for the
+    daily stream. Reads locally by default; S3 is opt-in through the same
+    source resolution the rest of the module uses.
 
     Args:
-        sim_path (str):
-            Local path OR S3 URL to directory containing simulation files.
-            - Local example: "/path/to/archive_1/ABBY.transient/lnd/hist/"
-            - S3 example:   "s3://clm-demonstration/archive_1/ABBY.transient/lnd/hist/"
-        neon_site (str):
-            Site name (used for plot title)
-        case_name (str):
-            CTSM case file prefix, e.g. "ABBY.transient.clm2"
-        var (str):
-            Variable to create plot for ("TSOI" or "H2OSOI")
-        year (int|str|None):
-            Year to filter files. If None, uses all files.
-        endpoint_url (str):
-            S3 endpoint URL for non-AWS S3 services
-        storage_options (dict|None):
-            Custom storage options for fsspec/s3fs
-        s3_client (boto3.client|None):
-            Pre-configured S3 client (created if None for S3 paths)
+        neon_site: NEON site code, e.g. "KONZ". Also used in the plot title.
+        var: Variable to plot, "TSOI" (soil temperature, converted to °C) or
+            "H2OSOI" (volumetric soil water).
+        year: Year to filter on. None reads every year present.
+        source: "local" (default) or "s3". Falls back to CTSM_DATA_SOURCE.
+        output_root: Local search root. Defaults to CTSM_OUTPUT_ROOT.
+        stream: "daily" or "monthly", used on the local path where the token
+            is discovered from disk.
+        stream_token: Stream token for the **S3 path only**, where nothing is
+            on local disk to probe. Defaults to the unsuffixed "h1" because
+            the S3 fixtures predate the CTSM 5.4 rename. Matches
+            open_ctsm_hist_from_s3 and neon_notebook_wrapper.list_sim_files_s3.
+        input_label: Case label, normally "transient".
+        endpoint_url: S3 endpoint for non-AWS services.
+        storage_options: fsspec/s3fs options; built from COS credentials if
+            omitted, and only on the S3 path.
 
     Returns:
-        xr.Dataset: The loaded dataset for further analysis
+        xr.Dataset: the loaded data, for further analysis.
+
+    Raises:
+        FileNotFoundError: on the local path when nothing matches, listing
+            the paths tried.
+        RuntimeError: on the S3 path when no keys match.
     """
 
     # ---------------------------------------------------
@@ -624,7 +631,8 @@ def plot_soil_profile_timeseries(neon_site, var, year=None, *,
         keys = list_objects_under_prefix(s3_client, bucket_name, prefix)
 
         # Filter matching files
-        fname_prefix = f"{case_name}.h1.{year_str}" if year else f"{case_name}.h1."
+        fname_prefix = (f"{case_name}.{stream_token}.{year_str}" if year
+                        else f"{case_name}.{stream_token}.")
         sim_keys = sorted(
             k for k in keys
             if k.startswith(prefix + fname_prefix) and k.endswith(".nc")
