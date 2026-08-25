@@ -1,0 +1,131 @@
+July 8th 2026
+
+CURRENT STATUS OF THE HUBS
+
+Definition: A Hub is a Jupyter notebook that provides the computational framework for integrating, executing, and demonstrating additional functionalities that extend the capabilities of the CESM simulator model. Each of the functionalities are motivated in the grant proposal submitted from Jingyi’s lab for NSF described here https://uwmadison.box.com/s/2i0pffh5xc17yukzpqxztl4fru6n4rfx
+
+Hub 1 - Data Analysis
+Goal: providing the user this layer to explore the data from NEON (native data for CESM)
+Input: The current development calls the data from S3. In S3 there is a copy of 3 NEON stations data, both input (NEON) and output (CESM output) of the CESM simulator for demonstration purposes.
+Expected Output: Plots of data, histograms https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/blob/main/notebooks/Data_Hub.ipynb
+Status: Completed
+Hub 2 - Modeling Hub
+Goal: The hub ingests CESM output (native output after processing NEON data) and demonstrates the capabilities described in this framework for applying the Kalman Filter. Specifically, the hub evaluates model fit and performs parameter adjustments using a Kalman Filter–based approach.
+Dependencies: https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/tree/main/analytics_modules
+Input: CESM simulations/outputs
+Expected Output: https://github.com/UW-Madison-DSI/ctsm-nsf-demonstration/blob/main/notebooks/misfit_eval.ipynb
+Status: Completed
+Hub 3 - Experimentation Hub
+Goal: The hub ingests NEON data into the CESM workflow, after specific scenarios of parameter perturbation or transformations. The hub is designed to demonstrate and compare how the CESM output when an input perturbation and when no perturbation of the input differ doing a t-test. This module touches the backend of CESM as it needs to process ”new” data e.g. NEON data under a transformation. It requires the output of CESM for data under perturbation and the output for data under no perturbation in order to generate 2 outputs to compare (please see diagram in page 4).
+Dependencies: https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/blob/main/cesm-tools/site_and_regional/run_neon_v2.py
+Input: CESM simulations/outputs after transforming: PFT, Soil type and []
+Expected Output: 
+Status: Completed
+
+Notes: 
+Hub 2 has as a backend the framework here https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/tree/main/analytics_modules
+Hub 2 and 3 have not been tested against the new architecture/design that pulls native data from NEON
+The rationale for incorporating S3 into the architecture is twofold: (1) it provides an immutable source of data that can be used as a reference for comparison after perturbations are introduced, and (2) it improves efficiency by reducing the need to repeatedly download data from NEON during the workflow.
+No solution is inherently wrong; the new design reflects different considerations, preferences, and an evaluation of long-term maintenance and feasibility. Please view what I implemented as a resource that can be leveraged when useful, taking the aspects that provide the most value for the current and future needs.
+
+Maria’s suggestion:
+There is an opportunity between the existing hubs and the current architecture Steve and Abe worked on, that means integrating hubs into the new design and pointing out to the data sources as in such new design OR viceversa, adjusting the design to the functionalities of the hubs e.g. maintaining the S3 source etc. My suggestion is going in the first way to take the most of the current design from Steve and Abe.
+I think that the easy way to go is simply adapting one jupyter notebook at a time, starting from the “Data Analysis” one that is the simplest and mapping out what needs to be changed to match the architecture design and reaching out to Jingyi to test out such portions.
+
+May - 2026
+MVP
+Goal - the goal is to extend the capacities of the https://ncar.github.io/ncar-neon-books/quick_start_docker_part2.html CTSM model in three main aspects:
+Data Access: we have put together NEON weather data in UW-Madison S3 to feed the workflow.
+Model Evaluation: refers to an statistical framework incorporated in the backend for 1) model evaluation eg goodness of fit, bias, etc, 2) data assimilation: kalman filter of the CESM physics model
+Scenario Analysis: allowing in the workflow the option to change data by transformations and compare the simulator on such data vs the simulation with no data change. The variables to incorporate are: PFT, Soil type, pcpt. This part is the most challenging and refers to the main python script: run_neon_v2.py here
+
+Quick start:
+On the current tool please see
+Dockerfile https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/blob/main/Dockerfile
+For the frontend design please check the jupyter notebooks (at this point there is no need for a security access layer such as user-password)
+Or please check the documentation of the original tool that we are extending https://ncar.github.io/ncar-neon-books/quick_start_docker_part2.html
+
+To be complete:
+Docker image portable
+Task (the data access): data is now stored in s3 with uw madison network restriction. This is a configuration of the s3 bucket that Jingyi owns. For the tool to be usable elsewhere, this condition must be changed.
+Task (slowness of the tool): basic assessment.
+Usability of the jupyter notebooks
+
+Plan: 
+Scope and Tool evaluation (Steve and Abe)
+Data accesses
+Can it be complete by June? If not, what is it needed?
+Slowness of the tool. Once using the docker image the notebooks run but it stocks quickly in a loading situation or kind of server disconnection. I dig a little bit on it and chatgpt says it is an incompatibility with mac vs Linux.
+Soil type variable aggregation - Maria (this goes to the jupyter notebooks section and here)
+
+Main question: what is it needed from Maria for a handover of the project to Steve and Abe?
+
+
+May 20ish 2026
+The purpose of this document is to support internal communication regarding the tool’s deployment, functionality, and collaborative workflows.
+
+Tool:
+ExSoil Cyber infrastructure GitHub repository: https://github.com/UW-Madison-DSI/exsoil-nsf-prototype
+Docker image: https://github.com/UW-Madison-DSI/exsoil-nsf-prototype/pkgs/container/exsoil-nsf-prototype
+
+Goal
+Please find the grant proposal doc here: https://uwmadison.box.com/s/2i0pffh5xc17yukzpqxztl4fru6n4rfx
+
+
+Completion/Milestones 
+ Preparation — Set up and run the CESM model with weather, soil, and land cover data
+ Machine Learning Framework (Link):
+Benchmarking — Build evaluation tool (ILAMB metrics) comparing model output vs. observations
+Data Assimilation — Implement 5-step EnKF loop (forecast → observe → update → cycle)
+NSF Proposal — Contribute to grant submission (due Dec 1, 2025)
+Scenario Analysis — Statistical framework for hypothesis testing, eg compared with the NTC is there a significant change in soil properties when perturbing climate, land use, and soil changes, specifically perturbing
+PFT
+Soil type
+temperature
+Infrastructure:
+Save data in S3 for 3 cases of weather stations
+Backend: 
+modifying the workflow of the CESM model to input perturbed parameters into the simulator and output variables of interest (Link)
+Include a statistical benchmarking framework for model evaluation and refinement — measuring bias, residuals, R², and related fit metrics — and incorporate a smoothing/assimilation step using Kalman Filter methods.
+Notebook design and deployment (Link): 
+data hub: user capable to interact with the weather data, please consider the datasets are xarrays so no trivial
+modeling hub: design a workflow for simulation evaluation and kalman filter integration for the model fitting
+experimentation hub: include hypothesis testing for when variable changes (scenarios) and how does that change the mode output
+Tool accessibility and deployment 
+Option 1: Docker Image for local use via CI/CD (Link)
+Option 2: VM hosting the tool
+Access: User-password protocol
+Security assessment given the communication with UW-Madison S3
+Usability: basic test of the notebooks 
+
+
+Internal Communication/Questions from Steve and Abe
+
+Feedback —-
+
+Usability/experience
+Not able to find the right kernel
+Accessing terminal/ngx
+Terminal does not work
+
+
+Plan/Next Steps
+Maria 
+Upgrading OS in computer to solve the compatibility issue with Docker, running the tool
+Adding the 2 variables above/testing the tool
+Abe and Steve 
+Discussing/playing with the tool for a high level architecture plan
+Assesment doc: Local Testing Review: exsoil-nsf-prototype-refactor
+Tldr - looks like we’ll likely need to look into creating an arm64 base image for escomp/cesm-lab-neon:latest
+Security assessment
+Changing the credentials of s3. Options:
+BFG to clean stuff out of the repo
+Filter repo
+Invalidating the current keys
+Any users can be able to access
+
+
+Maria - Articulating 2 documents
+Current state: scope, pros and cons on one jupyter notebook for multiple users
+Future state of the tool, feature user, multi users: addressing multicontainer and security issues for user management
+

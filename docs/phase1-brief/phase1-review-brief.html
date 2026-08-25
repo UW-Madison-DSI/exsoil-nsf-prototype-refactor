@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<!--
+IMPLEMENTATION BRIEF TEMPLATE
+
+Replace the four placeholders: Phase 1 Review Brief — Rebinding CTSM Data Access, What changed, what it accomplishes, and what it commits you to, <span>exsoil-nsf-prototype</span><span>feature/arm64-multiarch-rebuild</span><span>commit 430d416</span><span>2026-07-30</span>,   <section class="lead">
+    <p>Phase 1 set out to let the analysis notebooks read simulation output from
+    inside the container instead of from a private S3 bucket. Until now every
+    read went through <span class="k">campus.s3.wisc.edu</span> and required
+    credentials, and nothing in the codebase could read the output that CTSM
+    (the Community Terrestrial Systems Model, the land-surface model this
+    project runs) actually produces today.</p>
+    <p>This brief covers what changed, why each piece exists, and what it
+    commits you to. Unlike a pre-implementation brief, <strong>both sides of
+    every comparison are real code</strong> — nothing here is illustrative.
+    "Before" is the tree at <span class="k">430d416^</span>, "after" is what is
+    committed at <span class="k">430d416</span>. Nothing is merged; the branch
+    has no open pull request, so any of this can be reverted.</p>
+  </section>
+
+  <div class="note">
+    <p><strong>The one-sentence version:</strong> the readers were looking for
+    files whose names, directory, and binary format had all changed, and rather
+    than swapping one convention for another, the new code discovers which
+    convention it is looking at — because the old and new conventions both have
+    to keep working.</p>
+  </div>
+
+  <h2>Reading order</h2>
+  <ol class="toc">
+    <li><a href="#c1">Discover the stream name instead of hardcoding it</a> — the core fix</li>
+    <li><a href="#c2">Probe the archive layouts</a> — depends on 1</li>
+    <li><a href="#c3">Turn discovery into a file-list primitive that fails loudly</a> — depends on 1, 2</li>
+    <li><a href="#c4">Choose the file reader from the file's magic number</a> — independent</li>
+    <li><a href="#c5">The source-agnostic entry point</a> — depends on 3, 4</li>
+    <li><a href="#c6">Revive the dead local branch in the soil-profile plot</a> — depends on 3</li>
+    <li><a href="#c7">Parameterise the stream token on the two S3 readers</a> — independent</li>
+    <li><a href="#c8">Tests at the reader boundary</a> — depends on all</li>
+  </ol>
+
+  <h2>The changes</h2>
+
+  <div class="change" id="c1">
+    <div class="change-head">
+      <span class="change-num">CHANGE 1 OF 8</span>
+      <h3>Discover the stream name instead of hardcoding it</h3>
+      <span class="change-loc">data_access.py:249</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; data_access.py:180</figcaption>
+<pre><code>fname_prefix = f"{neon_site}.transient.clm2.h1.{year}"</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:249</figcaption>
+<pre><code>STREAM_TOKENS = {
+    "daily":   ("h1a", "h1"),
+    "monthly": ("h0a", "h0"),
+}</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>CTSM writes its results into many files whose names encode which
+      "stream" they belong to — a stream being one bundle of variables written
+      at one frequency. The code used to hardcode the single token
+      <span class="k">h1</span>. It now holds an ordered list per frequency and
+      tries each against the disk, newest naming first, taking whichever
+      matches.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>CTSM 5.4 renamed its streams: daily averages moved from
+      <span class="k">h1</span> to <span class="k">h1a</span> and monthly from
+      <span class="k">h0</span> to <span class="k">h0a</span>. Every file the
+      container produces carries the new names, so the old pattern matched
+      <strong>zero of 5,415 live files</strong>. No simulation output could
+      reach any notebook. Meanwhile the reference copies used to validate
+      results are from an older model generation and still carry the old names,
+      so both conventions have to work at once — this is not a migration that
+      finishes.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Probing rather than configuring means no caller has to know which
+      generation produced the data it is reading, and no config flag has to be
+      threaded through the notebooks. The cost is that a directory holding both
+      conventions resolves to the newer one by list order rather than by
+      anything explicit.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p>Order is load-bearing: <span class="k">"h1a"</span> must stay first in
+      the tuple. Reversing it would silently prefer legacy files wherever both
+      exist. A test asserts this, but it is the kind of thing a tidy-up could
+      undo.</p></div>
+  </div>
+
+  <div class="change" id="c2">
+    <div class="change-head">
+      <span class="change-num">CHANGE 2 OF 8</span>
+      <h3>Probe the archive layouts rather than assuming one</h3>
+      <span class="change-loc">data_access.py:269</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; data_access.py:179</figcaption>
+<pre><code>sim_path = f"archive_1/{neon_site}.transient/lnd/hist/"</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:279</figcaption>
+<pre><code>fixed = [
+    root / "lnd" / "hist",                       # root is already an archive
+    root / "archive" / "lnd" / "hist",           # run_tower
+    root / "archive" / case / "lnd" / "hist",    # S3 shape, staged locally
+    root / case / "lnd" / "hist",
+    root / "archive" / "archive" / case / "lnd" / "hist",   # reference copies
+]
+# run_neon_v2 writes archive/&lt;site&gt;/&lt;control|VAR_VALUE&gt;/lnd/hist
+globbed = sorted(root.glob(f"archive/{neon_site}/*/lnd/hist"))</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>Instead of one hardcoded directory, the code checks a short list of
+      known locations and uses the first that contains matching files.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>Where results land depends on which wrapper ran the simulation.
+      <span class="k">run_tower</span> archives a single case flat;
+      <span class="k">run_neon_v2.py</span>, which is what the Hubs drive,
+      inserts a site segment and an experiment segment so a perturbed run and
+      its control stay separate. A scientist should not have to know which tool
+      wrote their data in order to open it.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>This absorbs a real inconsistency instead of propagating it to every
+      caller. The tradeoff is that adding a layout means editing this list, and
+      a wrong-but-populated directory earlier in the list would win over the
+      right one later.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p>The <span class="k">run_neon_v2</span> root derives from
+      <span class="k">dirname(base_case_root)</span>, <em>not</em> from
+      <span class="k">output_root</span> — the two are not interchangeable, and
+      assuming they are is what produced the wrong path in the data contract.</p></div>
+  </div>
+
+  <div class="change" id="c3">
+    <div class="change-head">
+      <span class="change-num">CHANGE 3 OF 8</span>
+      <h3>A file-list primitive that fails loudly</h3>
+      <span class="change-loc">data_access.py:291</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; no equivalent existed</figcaption>
+<pre><code>(callers globbed inline, or got an empty
+ list back with no explanation)</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:332</figcaption>
+<pre><code>raise FileNotFoundError(
+    f"No CTSM {stream} history files for site={neon_site}, "
+    f"year={year if year is not None else 'any'} under {root}.\n"
+    "Tried:\n  " + "\n  ".join(tried)
+)</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>One function returns the sorted list of matching files. When it finds
+      nothing it raises, naming every directory and pattern it attempted.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>The dangerous failure is not a crash, it is silence: an empty match
+      flows downstream and reads as "this site has no data for that year",
+      which is a plausible scientific statement and a false one. Someone can
+      lose an afternoon to that.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Returning paths rather than a Dataset matters, because the evaluation
+      helpers in <span class="k">neon_eval_utils</span> consume file lists. A
+      Dataset-only interface would have left Hubs 2 and 3 keeping their own
+      globs, which is most of what Phase 1 was trying to eliminate.</p></div>
+  </div>
+
+  <div class="change" id="c4">
+    <div class="change-head">
+      <span class="change-num">CHANGE 4 OF 8</span>
+      <h3>Choose the reader from the file's magic number</h3>
+      <span class="change-loc">data_access.py:339</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; data_access.py:161</figcaption>
+<pre><code>engine: str = "scipy",   # NetCDF-3 reader (CDF\x01/CDF\x02)</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:349</figcaption>
+<pre><code>with open(path, "rb") as handle:
+    magic = handle.read(4)
+return "scipy" if magic in (b"CDF\x01", b"CDF\x02") else "netcdf4"</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>Reads the first four bytes of a file to identify its format, then picks
+      the matching reader library.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>NetCDF is the standard container format for climate data, and it has
+      several on-disk variants. Live output is <strong>CDF-5</strong>
+      (<span class="k">b'CDF\x05'</span>, verified on disk), a 64-bit variant
+      that the <span class="k">scipy</span> reader cannot open at all. The
+      reference copies are CDF-2, which it can. The plan guessed the live files
+      were NetCDF-4 and suggested <span class="k">h5netcdf</span> as the remedy;
+      that would also have failed, because CDF-5 is not HDF5.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Sniffing means no per-source configuration and no guessing when a third
+      format appears. The <span class="k">scipy</span> branch is kept rather
+      than always using <span class="k">netcdf4</span> because the S3 path
+      feeds fsspec file objects, which the netcdf4 engine cannot consume.</p></div>
+  </div>
+
+  <div class="change" id="c5">
+    <div class="change-head">
+      <span class="change-num">CHANGE 5 OF 8</span>
+      <h3>The source-agnostic entry point</h3>
+      <span class="change-loc">data_access.py:353, 386, 394</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; only an S3 reader existed</figcaption>
+<pre><code>open_ctsm_hist_from_s3(input_label, s3_client,
+                       bucket_name, neon_site, year, ...)</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:394</figcaption>
+<pre><code>if resolve_source(source) == "s3":
+    return open_ctsm_hist_from_s3(...)
+return open_ctsm_hist_local(
+    neon_site, year, output_root=output_root, stream=stream,
+    input_label=input_label, **kwargs
+)</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>One call, <span class="k">open_ctsm_hist(site, year)</span>, works
+      whichever source the data is in. It resolves to local unless told
+      otherwise via the <span class="k">CTSM_DATA_SOURCE</span> environment
+      variable or an explicit argument.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>A researcher pulling the container can open simulation output with no
+      credentials and no setup. Reaching the shared S3 fixtures becomes the
+      deliberate exception rather than the default path.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>The S3 functions are untouched and still work, so this adds a layer
+      rather than replacing one. Credentials were already requested lazily, so
+      nothing had to change to make them optional — the plan's Task 4 was
+      effectively already done in the library.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p><span class="k">CTSM_OUTPUT_ROOT</span> defaults to
+      <span class="k">/home/user</span>, which is right inside the container and
+      wrong on a development host, where it must be set explicitly. The plan
+      never pinned this default, so it is a decision made here rather than one
+      handed down.</p></div>
+  </div>
+
+  <div class="change" id="c6">
+    <div class="change-head">
+      <span class="change-num">CHANGE 6 OF 8</span>
+      <h3>Revive the dead local branch in the soil-profile plot</h3>
+      <span class="change-loc">data_access.py:470</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; data_access.py:280-286</figcaption>
+<pre><code>sim_path = f"s3://clm-demonstration/archive_1/{neon_site}.transient/lnd/hist/"
+...
+is_s3 = isinstance(sim_path, str) and sim_path.startswith("s3://")</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:470</figcaption>
+<pre><code>is_s3 = resolve_source(source) == "s3"</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>The function decided whether it was reading S3 by testing a string it
+      had assigned itself four lines earlier. That string always began with
+      <span class="k">s3://</span>, so the test was always true and the local
+      branch beneath it — around sixty lines — had never once executed. The
+      decision now comes from the same source resolution everything else
+      uses.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>Soil temperature and moisture profiles are the headline output of Hub
+      1. This is the function that draws them, and it could only ever draw them
+      from S3.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Dead code that looks live is worse than absent code: the plan cited
+      this local branch as evidence the rebind would be easy. It was never
+      evidence of anything, because it had never run.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p>That branch samples one timestep per file with
+      <span class="k">isel(time=24)</span>, assuming 48 half-hourly steps. It is
+      now clamped to the file length, but this path is newly live and has had
+      far less exercise than the code around it.</p></div>
+  </div>
+
+  <div class="change" id="c7">
+    <div class="change-head">
+      <span class="change-num">CHANGE 7 OF 8</span>
+      <h3>Parameterise the stream token on the two S3 readers</h3>
+      <span class="change-loc">data_access.py:161 &middot; neon_notebook_wrapper.py:26</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; neon_notebook_wrapper.py:34</figcaption>
+<pre><code>pattern = f"{neon_site}.transient.clm2.h1.{year}*.nc"</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; neon_notebook_wrapper.py:39</figcaption>
+<pre><code>stream_token: str = "h1",   # S3 copies predate the h1a/h0a rename
+...
+pattern = f"{neon_site}.transient.clm2.{stream_token}.{year}*.nc"</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>The token becomes an argument, with the default left at
+      <span class="k">h1</span>. Behaviour is unchanged.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>No domain consequence. The S3 bucket genuinely holds old-generation
+      files, so <span class="k">h1</span> is the correct thing to look for
+      there.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Worth stating plainly: <strong>the plan's instruction to change
+      <span class="k">h1</span> to <span class="k">h1a</span> "in both files"
+      would have broken the S3 path.</strong> The stale-looking token was
+      correct in this context. Only live local reads needed the new name.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p><span class="k">neon_notebook_wrapper.py:34</span> was the third
+      occurrence of this pattern and is named in neither the issue nor the plan.
+      It is re-exported publicly from the package.</p></div>
+  </div>
+
+  <div class="change" id="c8">
+    <div class="change-head">
+      <span class="change-num">CHANGE 8 OF 8</span>
+      <h3>Tests at the reader boundary</h3>
+      <span class="change-loc">tests/test_data_access_local.py (new, 128 lines)</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; no coverage of data_access.py</figcaption>
+<pre><code>(none)</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; test_data_access_local.py:107</figcaption>
+<pre><code>def test_opens_non_empty_dataset(self):
+    dataset = open_ctsm_hist("KONZ", 2018, output_root=LIVE_ROOT)
+    assert dataset.sizes.get("time", 0) &gt; 0
+    assert {"TSOI", "H2OSOI", "GPP"} &amp; set(dataset.variables)</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>Fifteen tests. Assertions are on file counts, stream tokens, and
+      non-zero time length rather than on calls merely not raising. Tests that
+      need real simulation output skip when it is absent.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>Verified against actual output: KONZ 2018 gives 365 daily files and
+      17,520 half-hourly timesteps with TSOI, H2OSOI and GPP present, and the
+      CLBJ 2019 reference copies read too.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>The plan specified no test coverage. Asserting non-emptiness is the
+      whole point — a test that only checks "did not raise" would pass against
+      an empty glob, which is the exact bug being fixed.</p></div>
+  </div>
+
+  <h2>Cross-cutting ramifications</h2>
+  <p>Two naming conventions and four archive layouts are now permanently
+  supported, not transitionally. Phase 5 validates live output against the
+  legacy reference copies, so both must stay readable for as long as that
+  validation matters. Anyone "cleaning up" the probe lists will break it.</p>
+  <p>The discovery logic is now the single place that knows how output is laid
+  out. That is the point, but it means a layout this list does not know about
+  fails everywhere at once rather than in one caller.</p>
+
+  <h2>Where the plan and the code disagreed</h2>
+  <table>
+    <thead><tr><th>Item</th><th>Status</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td>Change <span class="k">h1</span>→<span class="k">h1a</span> in both files</td><td><span class="tag tag-red">Would break S3</span></td><td>S3 and reference data legitimately use <span class="k">h1</span>. Resolved by probing instead of switching.</td></tr>
+      <tr><td>Engine "may be NetCDF-4"; try <span class="k">h5netcdf</span></td><td><span class="tag tag-red">Both wrong</span></td><td>Live output is CDF-5. Neither <span class="k">scipy</span> nor <span class="k">h5netcdf</span> can read it; <span class="k">netcdf4</span> can.</td></tr>
+      <tr><td>Live path is <span class="k">{output_root}/archive/lnd/hist/</span></td><td><span class="tag tag-red">Wrong for the Hubs</span></td><td><span class="k">run_neon_v2.py:1086-1089</span> uses <span class="k">{dirname(base_case_root)}/archive/{site}/{exp}/</span>. Data contract corrected in <span class="k">ebf68fc</span>.</td></tr>
+      <tr><td>Two files need the fix</td><td><span class="tag tag-amber">Three</span></td><td><span class="k">neon_notebook_wrapper.py:34</span> is named nowhere in the plan or issue.</td></tr>
+      <tr><td>Task 4: stop requiring COS credentials</td><td><span class="tag tag-green">Already true</span></td><td>The library was already lazy. The eager check is a notebook cell, so Phase 2.</td></tr>
+      <tr><td>Local branch in the plotting helper proves the rebind is easy</td><td><span class="tag tag-red">Dead code</span></td><td>Unreachable since <span class="k">is_s3</span> was derived from a literal. Never executed.</td></tr>
+      <tr><td>Fixtures live in <span class="k">tests/fixtures/reference_output/</span></td><td><span class="tag tag-amber">Actually elsewhere</span></td><td>They are at <span class="k">archive/archive/{CASE}/lnd/hist/</span>, gitignored.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn">
+    <p><strong>Not caused by this change, but it will bite Phase 2.</strong> The
+    container ships a baked copy of <span class="k">analytics_modules</span> at
+    <span class="k">/opt/analytics_modules</span>, which shadows the repository
+    on <span class="k">sys.path</span>. Editing the working tree changes nothing
+    a notebook imports unless <span class="k">PYTHONPATH</span> points at it.
+    This surfaced while testing.</p>
+  </div>
+
+  <h2>Questions for the author</h2>
+  <table>
+    <thead><tr><th>Question</th><th>Why it needs you</th></tr></thead>
+    <tbody>
+      <tr><td>Is <span class="k">/home/user</span> the right default for <span class="k">CTSM_OUTPUT_ROOT</span>?</td><td>Correct in-container, requires setting on a dev host. The plan never pinned it, so this default was chosen here.</td></tr>
+      <tr><td>Should <span class="k">run_neon_v2.py</span>'s forked copy of these readers be deleted rather than maintained in parallel?</td><td>It duplicates roughly 200 lines and shares the interpreter. Deleting collapses future fixes to one place, but touches the simulation driver.</td></tr>
+      <tr><td>Should the reference copies move to the location the plan documents?</td><td>They sit at <span class="k">archive/archive/</span> while the plan and Phase 0 both say <span class="k">tests/fixtures/reference_output/</span>. The probe list currently supports both.</td></tr>
+      <tr><td>Keep the residual hardcoded <span class="k">h1</span> in the plotting helper's S3 branch?</td><td><span class="k">data_access.py:503</span> is correct for S3 but inconsistent with the parameterisation applied elsewhere.</td></tr>
+    </tbody>
+  </table>
+.
+<span>exsoil-nsf-prototype</span><span>feature/arm64-multiarch-rebuild</span><span>commit 430d416</span><span>2026-07-30</span> takes <span> items, e.g. <span>repo/branch</span><span>2026-07-30</span>
+Everything below is self-contained: no external fonts, scripts, or styles.
+
+CLASSES AVAILABLE IN   <section class="lead">
+    <p>Phase 1 set out to let the analysis notebooks read simulation output from
+    inside the container instead of from a private S3 bucket. Until now every
+    read went through <span class="k">campus.s3.wisc.edu</span> and required
+    credentials, and nothing in the codebase could read the output that CTSM
+    (the Community Terrestrial Systems Model, the land-surface model this
+    project runs) actually produces today.</p>
+    <p>This brief covers what changed, why each piece exists, and what it
+    commits you to. Unlike a pre-implementation brief, <strong>both sides of
+    every comparison are real code</strong> — nothing here is illustrative.
+    "Before" is the tree at <span class="k">430d416^</span>, "after" is what is
+    committed at <span class="k">430d416</span>. Nothing is merged; the branch
+    has no open pull request, so any of this can be reverted.</p>
+  </section>
+
+  <div class="note">
+    <p><strong>The one-sentence version:</strong> the readers were looking for
+    files whose names, directory, and binary format had all changed, and rather
+    than swapping one convention for another, the new code discovers which
+    convention it is looking at — because the old and new conventions both have
+    to keep working.</p>
+  </div>
+
+  <h2>Reading order</h2>
+  <ol class="toc">
+    <li><a href="#c1">Discover the stream name instead of hardcoding it</a> — the core fix</li>
+    <li><a href="#c2">Probe the archive layouts</a> — depends on 1</li>
+    <li><a href="#c3">Turn discovery into a file-list primitive that fails loudly</a> — depends on 1, 2</li>
+    <li><a href="#c4">Choose the file reader from the file's magic number</a> — independent</li>
+    <li><a href="#c5">The source-agnostic entry point</a> — depends on 3, 4</li>
+    <li><a href="#c6">Revive the dead local branch in the soil-profile plot</a> — depends on 3</li>
+    <li><a href="#c7">Parameterise the stream token on the two S3 readers</a> — independent</li>
+    <li><a href="#c8">Tests at the reader boundary</a> — depends on all</li>
+  </ol>
+
+  <h2>The changes</h2>
+
+  <div class="change" id="c1">
+    <div class="change-head">
+      <span class="change-num">CHANGE 1 OF 8</span>
+      <h3>Discover the stream name instead of hardcoding it</h3>
+      <span class="change-loc">data_access.py:249</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; data_access.py:180</figcaption>
+<pre><code>fname_prefix = f"{neon_site}.transient.clm2.h1.{year}"</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:249</figcaption>
+<pre><code>STREAM_TOKENS = {
+    "daily":   ("h1a", "h1"),
+    "monthly": ("h0a", "h0"),
+}</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>CTSM writes its results into many files whose names encode which
+      "stream" they belong to — a stream being one bundle of variables written
+      at one frequency. The code used to hardcode the single token
+      <span class="k">h1</span>. It now holds an ordered list per frequency and
+      tries each against the disk, newest naming first, taking whichever
+      matches.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>CTSM 5.4 renamed its streams: daily averages moved from
+      <span class="k">h1</span> to <span class="k">h1a</span> and monthly from
+      <span class="k">h0</span> to <span class="k">h0a</span>. Every file the
+      container produces carries the new names, so the old pattern matched
+      <strong>zero of 5,415 live files</strong>. No simulation output could
+      reach any notebook. Meanwhile the reference copies used to validate
+      results are from an older model generation and still carry the old names,
+      so both conventions have to work at once — this is not a migration that
+      finishes.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Probing rather than configuring means no caller has to know which
+      generation produced the data it is reading, and no config flag has to be
+      threaded through the notebooks. The cost is that a directory holding both
+      conventions resolves to the newer one by list order rather than by
+      anything explicit.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p>Order is load-bearing: <span class="k">"h1a"</span> must stay first in
+      the tuple. Reversing it would silently prefer legacy files wherever both
+      exist. A test asserts this, but it is the kind of thing a tidy-up could
+      undo.</p></div>
+  </div>
+
+  <div class="change" id="c2">
+    <div class="change-head">
+      <span class="change-num">CHANGE 2 OF 8</span>
+      <h3>Probe the archive layouts rather than assuming one</h3>
+      <span class="change-loc">data_access.py:269</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; data_access.py:179</figcaption>
+<pre><code>sim_path = f"archive_1/{neon_site}.transient/lnd/hist/"</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:279</figcaption>
+<pre><code>fixed = [
+    root / "lnd" / "hist",                       # root is already an archive
+    root / "archive" / "lnd" / "hist",           # run_tower
+    root / "archive" / case / "lnd" / "hist",    # S3 shape, staged locally
+    root / case / "lnd" / "hist",
+    root / "archive" / "archive" / case / "lnd" / "hist",   # reference copies
+]
+# run_neon_v2 writes archive/&lt;site&gt;/&lt;control|VAR_VALUE&gt;/lnd/hist
+globbed = sorted(root.glob(f"archive/{neon_site}/*/lnd/hist"))</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>Instead of one hardcoded directory, the code checks a short list of
+      known locations and uses the first that contains matching files.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>Where results land depends on which wrapper ran the simulation.
+      <span class="k">run_tower</span> archives a single case flat;
+      <span class="k">run_neon_v2.py</span>, which is what the Hubs drive,
+      inserts a site segment and an experiment segment so a perturbed run and
+      its control stay separate. A scientist should not have to know which tool
+      wrote their data in order to open it.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>This absorbs a real inconsistency instead of propagating it to every
+      caller. The tradeoff is that adding a layout means editing this list, and
+      a wrong-but-populated directory earlier in the list would win over the
+      right one later.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p>The <span class="k">run_neon_v2</span> root derives from
+      <span class="k">dirname(base_case_root)</span>, <em>not</em> from
+      <span class="k">output_root</span> — the two are not interchangeable, and
+      assuming they are is what produced the wrong path in the data contract.</p></div>
+  </div>
+
+  <div class="change" id="c3">
+    <div class="change-head">
+      <span class="change-num">CHANGE 3 OF 8</span>
+      <h3>A file-list primitive that fails loudly</h3>
+      <span class="change-loc">data_access.py:291</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; no equivalent existed</figcaption>
+<pre><code>(callers globbed inline, or got an empty
+ list back with no explanation)</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:332</figcaption>
+<pre><code>raise FileNotFoundError(
+    f"No CTSM {stream} history files for site={neon_site}, "
+    f"year={year if year is not None else 'any'} under {root}.\n"
+    "Tried:\n  " + "\n  ".join(tried)
+)</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>One function returns the sorted list of matching files. When it finds
+      nothing it raises, naming every directory and pattern it attempted.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>The dangerous failure is not a crash, it is silence: an empty match
+      flows downstream and reads as "this site has no data for that year",
+      which is a plausible scientific statement and a false one. Someone can
+      lose an afternoon to that.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Returning paths rather than a Dataset matters, because the evaluation
+      helpers in <span class="k">neon_eval_utils</span> consume file lists. A
+      Dataset-only interface would have left Hubs 2 and 3 keeping their own
+      globs, which is most of what Phase 1 was trying to eliminate.</p></div>
+  </div>
+
+  <div class="change" id="c4">
+    <div class="change-head">
+      <span class="change-num">CHANGE 4 OF 8</span>
+      <h3>Choose the reader from the file's magic number</h3>
+      <span class="change-loc">data_access.py:339</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; data_access.py:161</figcaption>
+<pre><code>engine: str = "scipy",   # NetCDF-3 reader (CDF\x01/CDF\x02)</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:349</figcaption>
+<pre><code>with open(path, "rb") as handle:
+    magic = handle.read(4)
+return "scipy" if magic in (b"CDF\x01", b"CDF\x02") else "netcdf4"</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>Reads the first four bytes of a file to identify its format, then picks
+      the matching reader library.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>NetCDF is the standard container format for climate data, and it has
+      several on-disk variants. Live output is <strong>CDF-5</strong>
+      (<span class="k">b'CDF\x05'</span>, verified on disk), a 64-bit variant
+      that the <span class="k">scipy</span> reader cannot open at all. The
+      reference copies are CDF-2, which it can. The plan guessed the live files
+      were NetCDF-4 and suggested <span class="k">h5netcdf</span> as the remedy;
+      that would also have failed, because CDF-5 is not HDF5.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Sniffing means no per-source configuration and no guessing when a third
+      format appears. The <span class="k">scipy</span> branch is kept rather
+      than always using <span class="k">netcdf4</span> because the S3 path
+      feeds fsspec file objects, which the netcdf4 engine cannot consume.</p></div>
+  </div>
+
+  <div class="change" id="c5">
+    <div class="change-head">
+      <span class="change-num">CHANGE 5 OF 8</span>
+      <h3>The source-agnostic entry point</h3>
+      <span class="change-loc">data_access.py:353, 386, 394</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; only an S3 reader existed</figcaption>
+<pre><code>open_ctsm_hist_from_s3(input_label, s3_client,
+                       bucket_name, neon_site, year, ...)</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:394</figcaption>
+<pre><code>if resolve_source(source) == "s3":
+    return open_ctsm_hist_from_s3(...)
+return open_ctsm_hist_local(
+    neon_site, year, output_root=output_root, stream=stream,
+    input_label=input_label, **kwargs
+)</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>One call, <span class="k">open_ctsm_hist(site, year)</span>, works
+      whichever source the data is in. It resolves to local unless told
+      otherwise via the <span class="k">CTSM_DATA_SOURCE</span> environment
+      variable or an explicit argument.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>A researcher pulling the container can open simulation output with no
+      credentials and no setup. Reaching the shared S3 fixtures becomes the
+      deliberate exception rather than the default path.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>The S3 functions are untouched and still work, so this adds a layer
+      rather than replacing one. Credentials were already requested lazily, so
+      nothing had to change to make them optional — the plan's Task 4 was
+      effectively already done in the library.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p><span class="k">CTSM_OUTPUT_ROOT</span> defaults to
+      <span class="k">/home/user</span>, which is right inside the container and
+      wrong on a development host, where it must be set explicitly. The plan
+      never pinned this default, so it is a decision made here rather than one
+      handed down.</p></div>
+  </div>
+
+  <div class="change" id="c6">
+    <div class="change-head">
+      <span class="change-num">CHANGE 6 OF 8</span>
+      <h3>Revive the dead local branch in the soil-profile plot</h3>
+      <span class="change-loc">data_access.py:470</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; data_access.py:280-286</figcaption>
+<pre><code>sim_path = f"s3://clm-demonstration/archive_1/{neon_site}.transient/lnd/hist/"
+...
+is_s3 = isinstance(sim_path, str) and sim_path.startswith("s3://")</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:470</figcaption>
+<pre><code>is_s3 = resolve_source(source) == "s3"</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>The function decided whether it was reading S3 by testing a string it
+      had assigned itself four lines earlier. That string always began with
+      <span class="k">s3://</span>, so the test was always true and the local
+      branch beneath it — around sixty lines — had never once executed. The
+      decision now comes from the same source resolution everything else
+      uses.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>Soil temperature and moisture profiles are the headline output of Hub
+      1. This is the function that draws them, and it could only ever draw them
+      from S3.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Dead code that looks live is worse than absent code: the plan cited
+      this local branch as evidence the rebind would be easy. It was never
+      evidence of anything, because it had never run.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p>That branch samples one timestep per file with
+      <span class="k">isel(time=24)</span>, assuming 48 half-hourly steps. It is
+      now clamped to the file length, but this path is newly live and has had
+      far less exercise than the code around it.</p></div>
+  </div>
+
+  <div class="change" id="c7">
+    <div class="change-head">
+      <span class="change-num">CHANGE 7 OF 8</span>
+      <h3>Parameterise the stream token on the two S3 readers</h3>
+      <span class="change-loc">data_access.py:161 &middot; neon_notebook_wrapper.py:26</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; neon_notebook_wrapper.py:34</figcaption>
+<pre><code>pattern = f"{neon_site}.transient.clm2.h1.{year}*.nc"</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; neon_notebook_wrapper.py:39</figcaption>
+<pre><code>stream_token: str = "h1",   # S3 copies predate the h1a/h0a rename
+...
+pattern = f"{neon_site}.transient.clm2.{stream_token}.{year}*.nc"</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>The token becomes an argument, with the default left at
+      <span class="k">h1</span>. Behaviour is unchanged.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>No domain consequence. The S3 bucket genuinely holds old-generation
+      files, so <span class="k">h1</span> is the correct thing to look for
+      there.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Worth stating plainly: <strong>the plan's instruction to change
+      <span class="k">h1</span> to <span class="k">h1a</span> "in both files"
+      would have broken the S3 path.</strong> The stale-looking token was
+      correct in this context. Only live local reads needed the new name.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p><span class="k">neon_notebook_wrapper.py:34</span> was the third
+      occurrence of this pattern and is named in neither the issue nor the plan.
+      It is re-exported publicly from the package.</p></div>
+  </div>
+
+  <div class="change" id="c8">
+    <div class="change-head">
+      <span class="change-num">CHANGE 8 OF 8</span>
+      <h3>Tests at the reader boundary</h3>
+      <span class="change-loc">tests/test_data_access_local.py (new, 128 lines)</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; no coverage of data_access.py</figcaption>
+<pre><code>(none)</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; test_data_access_local.py:107</figcaption>
+<pre><code>def test_opens_non_empty_dataset(self):
+    dataset = open_ctsm_hist("KONZ", 2018, output_root=LIVE_ROOT)
+    assert dataset.sizes.get("time", 0) &gt; 0
+    assert {"TSOI", "H2OSOI", "GPP"} &amp; set(dataset.variables)</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>Fifteen tests. Assertions are on file counts, stream tokens, and
+      non-zero time length rather than on calls merely not raising. Tests that
+      need real simulation output skip when it is absent.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>Verified against actual output: KONZ 2018 gives 365 daily files and
+      17,520 half-hourly timesteps with TSOI, H2OSOI and GPP present, and the
+      CLBJ 2019 reference copies read too.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>The plan specified no test coverage. Asserting non-emptiness is the
+      whole point — a test that only checks "did not raise" would pass against
+      an empty glob, which is the exact bug being fixed.</p></div>
+  </div>
+
+  <h2>Cross-cutting ramifications</h2>
+  <p>Two naming conventions and four archive layouts are now permanently
+  supported, not transitionally. Phase 5 validates live output against the
+  legacy reference copies, so both must stay readable for as long as that
+  validation matters. Anyone "cleaning up" the probe lists will break it.</p>
+  <p>The discovery logic is now the single place that knows how output is laid
+  out. That is the point, but it means a layout this list does not know about
+  fails everywhere at once rather than in one caller.</p>
+
+  <h2>Where the plan and the code disagreed</h2>
+  <table>
+    <thead><tr><th>Item</th><th>Status</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td>Change <span class="k">h1</span>→<span class="k">h1a</span> in both files</td><td><span class="tag tag-red">Would break S3</span></td><td>S3 and reference data legitimately use <span class="k">h1</span>. Resolved by probing instead of switching.</td></tr>
+      <tr><td>Engine "may be NetCDF-4"; try <span class="k">h5netcdf</span></td><td><span class="tag tag-red">Both wrong</span></td><td>Live output is CDF-5. Neither <span class="k">scipy</span> nor <span class="k">h5netcdf</span> can read it; <span class="k">netcdf4</span> can.</td></tr>
+      <tr><td>Live path is <span class="k">{output_root}/archive/lnd/hist/</span></td><td><span class="tag tag-red">Wrong for the Hubs</span></td><td><span class="k">run_neon_v2.py:1086-1089</span> uses <span class="k">{dirname(base_case_root)}/archive/{site}/{exp}/</span>. Data contract corrected in <span class="k">ebf68fc</span>.</td></tr>
+      <tr><td>Two files need the fix</td><td><span class="tag tag-amber">Three</span></td><td><span class="k">neon_notebook_wrapper.py:34</span> is named nowhere in the plan or issue.</td></tr>
+      <tr><td>Task 4: stop requiring COS credentials</td><td><span class="tag tag-green">Already true</span></td><td>The library was already lazy. The eager check is a notebook cell, so Phase 2.</td></tr>
+      <tr><td>Local branch in the plotting helper proves the rebind is easy</td><td><span class="tag tag-red">Dead code</span></td><td>Unreachable since <span class="k">is_s3</span> was derived from a literal. Never executed.</td></tr>
+      <tr><td>Fixtures live in <span class="k">tests/fixtures/reference_output/</span></td><td><span class="tag tag-amber">Actually elsewhere</span></td><td>They are at <span class="k">archive/archive/{CASE}/lnd/hist/</span>, gitignored.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn">
+    <p><strong>Not caused by this change, but it will bite Phase 2.</strong> The
+    container ships a baked copy of <span class="k">analytics_modules</span> at
+    <span class="k">/opt/analytics_modules</span>, which shadows the repository
+    on <span class="k">sys.path</span>. Editing the working tree changes nothing
+    a notebook imports unless <span class="k">PYTHONPATH</span> points at it.
+    This surfaced while testing.</p>
+  </div>
+
+  <h2>Questions for the author</h2>
+  <table>
+    <thead><tr><th>Question</th><th>Why it needs you</th></tr></thead>
+    <tbody>
+      <tr><td>Is <span class="k">/home/user</span> the right default for <span class="k">CTSM_OUTPUT_ROOT</span>?</td><td>Correct in-container, requires setting on a dev host. The plan never pinned it, so this default was chosen here.</td></tr>
+      <tr><td>Should <span class="k">run_neon_v2.py</span>'s forked copy of these readers be deleted rather than maintained in parallel?</td><td>It duplicates roughly 200 lines and shares the interpreter. Deleting collapses future fixes to one place, but touches the simulation driver.</td></tr>
+      <tr><td>Should the reference copies move to the location the plan documents?</td><td>They sit at <span class="k">archive/archive/</span> while the plan and Phase 0 both say <span class="k">tests/fixtures/reference_output/</span>. The probe list currently supports both.</td></tr>
+      <tr><td>Keep the residual hardcoded <span class="k">h1</span> in the plotting helper's S3 branch?</td><td><span class="k">data_access.py:503</span> is correct for S3 but inconsistent with the parameterisation applied elsewhere.</td></tr>
+    </tbody>
+  </table>
+
+
+  <section class="lead">              opening orientation, larger type
+  <ol class="toc">                    reading order; <li> holds <a href="#c1">
+  <div class="change" id="c1">        one reviewable change
+    <div class="change-head">
+      <span class="change-num">CHANGE 1 OF 7</span>
+      <h3>Short imperative title</h3>
+      <span class="change-loc">path/to/file.py:264</span>
+    </div>
+    <div class="code-pair">           side by side on screen, stacked in print
+      <figure class="code today">
+        <figcaption>Today &middot; path/to/file.py:264</figcaption>
+        <pre><code>...</code></pre>
+      </figure>
+      <figure class="code proposed">
+        <figcaption>Proposed &middot; illustrative</figcaption>
+        <pre><code>...</code></pre>
+      </figure>
+    </div>
+    <div class="block plainly">   <h4>What it does, plainly</h4>      <p>...</p> </div>
+    <div class="block domain">    <h4>Why it matters to the domain</h4><p>...</p> </div>
+    <div class="block swe">       <h4>Why it matters to the codebase</h4><p>...</p></div>
+    <div class="block watch">     <h4>Watch out for</h4>              <p>...</p> </div>
+  </div>
+
+  <div class="note">                  neutral aside
+  <div class="note warn">             something the reader must not miss
+  <table>                             discrepancies, callers, decisions
+  <span class="tag">…</span>          inline label; add tag-red / tag-amber / tag-green
+  <span class="k">…</span>            inline code-ish emphasis inside prose
+
+Use a single <code> element per <pre>. Escape &lt; &gt; &amp; inside code.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 Review Brief — Rebinding CTSM Data Access</title>
+<style>
+  :root {
+    --ink: #17181c;
+    --ink-soft: #40434c;
+    --ink-mute: #6b7080;
+    --rule: #dcdee5;
+    --rule-soft: #ebedf1;
+    --page: #ffffff;
+    --panel: #f7f8fa;
+    --code-bg: #f4f5f8;
+    --accent: #1f4f8f;
+    --today: #8a6410;
+    --today-bg: #fdf8ec;
+    --proposed: #1c6b43;
+    --proposed-bg: #f0f8f3;
+    --red: #a32020;
+    --amber: #8a6410;
+    --green: #1c6b43;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e8eaee; --ink-soft: #c0c4cd; --ink-mute: #8b909e;
+      --rule: #343842; --rule-soft: #262a32;
+      --page: #14161a; --panel: #1b1e24; --code-bg: #1b1e24;
+      --accent: #7aa9e8;
+      --today: #d2a548; --today-bg: #241f14;
+      --proposed: #6bbd8e; --proposed-bg: #14211a;
+      --red: #e07070; --amber: #d2a548; --green: #6bbd8e;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  }
+  .wrap { max-width: 60rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+
+  header.page { border-bottom: 2px solid var(--ink); padding-bottom: 1.25rem; margin-bottom: 2rem; }
+  header.page h1 { font-size: 1.95rem; line-height: 1.2; margin: 0 0 .4rem; letter-spacing: -.015em; }
+  header.page .sub { color: var(--ink-soft); font-size: 1.05rem; margin: 0 0 .9rem; }
+  header.page .meta { display: flex; flex-wrap: wrap; gap: .45rem 1.1rem; font-size: .8rem;
+    color: var(--ink-mute); font-family: var(--mono); }
+
+  h2 { font-size: 1.3rem; margin: 2.75rem 0 .85rem; padding-bottom: .35rem;
+       border-bottom: 1px solid var(--rule); letter-spacing: -.01em; }
+  h3 { font-size: 1.12rem; margin: 0; letter-spacing: -.01em; }
+  h4 { font-size: .74rem; text-transform: uppercase; letter-spacing: .07em;
+       margin: 0 0 .3rem; color: var(--ink-mute); font-weight: 600; }
+  p { margin: 0 0 .8rem; }
+  p:last-child { margin-bottom: 0; }
+  a { color: var(--accent); }
+
+  .lead { font-size: 1.05rem; color: var(--ink-soft); }
+  .lead p { margin-bottom: .9rem; }
+
+  ol.toc { margin: 0; padding-left: 1.4rem; }
+  ol.toc li { margin: .3rem 0; }
+  ol.toc a { text-decoration: none; }
+  ol.toc a:hover { text-decoration: underline; }
+
+  .change { border: 1px solid var(--rule); border-radius: 10px; padding: 1.4rem 1.5rem;
+            margin: 1.4rem 0; background: var(--page); }
+  .change-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: .5rem .8rem;
+                 margin-bottom: 1rem; }
+  .change-num { font-family: var(--mono); font-size: .7rem; letter-spacing: .09em;
+                color: var(--accent); font-weight: 600; width: 100%; }
+  .change-loc { margin-left: auto; font-family: var(--mono); font-size: .74rem;
+                color: var(--ink-mute); }
+
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin: 0 0 1.2rem; }
+  @media (max-width: 46rem) { .code-pair { grid-template-columns: 1fr; } }
+  figure.code { margin: 0; border: 1px solid var(--rule); border-radius: 7px; overflow: hidden;
+                min-width: 0; }
+  figure.code figcaption { font-family: var(--mono); font-size: .68rem; letter-spacing: .05em;
+                text-transform: uppercase; padding: .4rem .7rem; border-bottom: 1px solid var(--rule);
+                color: var(--ink-mute); background: var(--panel); }
+  figure.code.today figcaption { color: var(--today); background: var(--today-bg); }
+  figure.code.proposed figcaption { color: var(--proposed); background: var(--proposed-bg); }
+  pre { margin: 0; padding: .75rem .8rem; overflow-x: auto; background: var(--code-bg); }
+  pre code { font-family: var(--mono); font-size: .8rem; line-height: 1.55; white-space: pre; }
+  .k { font-family: var(--mono); font-size: .87em; background: var(--code-bg);
+       padding: .08em .34em; border-radius: 3px; }
+
+  .block { border-left: 3px solid var(--rule); padding: 0 0 0 .9rem; margin: 0 0 .95rem; }
+  .block:last-child { margin-bottom: 0; }
+  .block.domain { border-left-color: var(--accent); }
+  .block.swe { border-left-color: var(--ink-mute); }
+  .block.watch { border-left-color: var(--red); }
+  .block.watch h4 { color: var(--red); }
+
+  .note { border: 1px solid var(--rule); border-left: 3px solid var(--ink-mute);
+          background: var(--panel); border-radius: 0 7px 7px 0; padding: .85rem 1rem; margin: 1.1rem 0; }
+  .note.warn { border-left-color: var(--red); }
+
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .92rem; }
+  th, td { text-align: left; vertical-align: top; padding: .55rem .7rem;
+           border-bottom: 1px solid var(--rule-soft); }
+  th { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+       color: var(--ink-mute); border-bottom: 1px solid var(--rule); }
+
+  .tag { display: inline-block; font-family: var(--mono); font-size: .67rem; font-weight: 600;
+         text-transform: uppercase; letter-spacing: .06em; padding: .15rem .5rem;
+         border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .tag-red { color: var(--red); } .tag-amber { color: var(--amber); } .tag-green { color: var(--green); }
+
+  @media print {
+    @page { margin: 14mm; }
+    body { background: #fff; color: #000; font-size: 10.5pt; }
+    .wrap { max-width: none; padding: 0; }
+    .change, .note, figure.code { break-inside: avoid; }
+    .code-pair { grid-template-columns: 1fr; }
+    pre code { font-size: 8.6pt; white-space: pre-wrap; word-break: break-word; }
+    h2 { break-after: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <h1>Phase 1 Review Brief — Rebinding CTSM Data Access</h1>
+    <p class="sub">What changed, what it accomplishes, and what it commits you to</p>
+    <div class="meta"><span>exsoil-nsf-prototype</span><span>feature/arm64-multiarch-rebuild</span><span>commit 430d416</span><span>2026-07-30</span></div>
+  </header>
+  <section class="lead">
+    <p>Phase 1 set out to let the analysis notebooks read simulation output from
+    inside the container instead of from a private S3 bucket. Until now every
+    read went through <span class="k">campus.s3.wisc.edu</span> and required
+    credentials, and nothing in the codebase could read the output that CTSM
+    (the Community Terrestrial Systems Model, the land-surface model this
+    project runs) actually produces today.</p>
+    <p>This brief covers what changed, why each piece exists, and what it
+    commits you to. Unlike a pre-implementation brief, <strong>both sides of
+    every comparison are real code</strong> — nothing here is illustrative.
+    "Before" is the tree at <span class="k">430d416^</span>, "after" is what is
+    committed at <span class="k">430d416</span>. Nothing is merged; the branch
+    has no open pull request, so any of this can be reverted.</p>
+  </section>
+
+  <div class="note">
+    <p><strong>The one-sentence version:</strong> the readers were looking for
+    files whose names, directory, and binary format had all changed, and rather
+    than swapping one convention for another, the new code discovers which
+    convention it is looking at — because the old and new conventions both have
+    to keep working.</p>
+  </div>
+
+  <h2>Reading order</h2>
+  <ol class="toc">
+    <li><a href="#c1">Discover the stream name instead of hardcoding it</a> — the core fix</li>
+    <li><a href="#c2">Probe the archive layouts</a> — depends on 1</li>
+    <li><a href="#c3">Turn discovery into a file-list primitive that fails loudly</a> — depends on 1, 2</li>
+    <li><a href="#c4">Choose the file reader from the file's magic number</a> — independent</li>
+    <li><a href="#c5">The source-agnostic entry point</a> — depends on 3, 4</li>
+    <li><a href="#c6">Revive the dead local branch in the soil-profile plot</a> — depends on 3</li>
+    <li><a href="#c7">Parameterise the stream token on the two S3 readers</a> — independent</li>
+    <li><a href="#c8">Tests at the reader boundary</a> — depends on all</li>
+  </ol>
+
+  <h2>The changes</h2>
+
+  <div class="change" id="c1">
+    <div class="change-head">
+      <span class="change-num">CHANGE 1 OF 8</span>
+      <h3>Discover the stream name instead of hardcoding it</h3>
+      <span class="change-loc">data_access.py:249</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; data_access.py:180</figcaption>
+<pre><code>fname_prefix = f"{neon_site}.transient.clm2.h1.{year}"</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:249</figcaption>
+<pre><code>STREAM_TOKENS = {
+    "daily":   ("h1a", "h1"),
+    "monthly": ("h0a", "h0"),
+}</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>CTSM writes its results into many files whose names encode which
+      "stream" they belong to — a stream being one bundle of variables written
+      at one frequency. The code used to hardcode the single token
+      <span class="k">h1</span>. It now holds an ordered list per frequency and
+      tries each against the disk, newest naming first, taking whichever
+      matches.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>CTSM 5.4 renamed its streams: daily averages moved from
+      <span class="k">h1</span> to <span class="k">h1a</span> and monthly from
+      <span class="k">h0</span> to <span class="k">h0a</span>. Every file the
+      container produces carries the new names, so the old pattern matched
+      <strong>zero of 5,415 live files</strong>. No simulation output could
+      reach any notebook. Meanwhile the reference copies used to validate
+      results are from an older model generation and still carry the old names,
+      so both conventions have to work at once — this is not a migration that
+      finishes.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Probing rather than configuring means no caller has to know which
+      generation produced the data it is reading, and no config flag has to be
+      threaded through the notebooks. The cost is that a directory holding both
+      conventions resolves to the newer one by list order rather than by
+      anything explicit.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p>Order is load-bearing: <span class="k">"h1a"</span> must stay first in
+      the tuple. Reversing it would silently prefer legacy files wherever both
+      exist. A test asserts this, but it is the kind of thing a tidy-up could
+      undo.</p></div>
+  </div>
+
+  <div class="change" id="c2">
+    <div class="change-head">
+      <span class="change-num">CHANGE 2 OF 8</span>
+      <h3>Probe the archive layouts rather than assuming one</h3>
+      <span class="change-loc">data_access.py:269</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; data_access.py:179</figcaption>
+<pre><code>sim_path = f"archive_1/{neon_site}.transient/lnd/hist/"</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:279</figcaption>
+<pre><code>fixed = [
+    root / "lnd" / "hist",                       # root is already an archive
+    root / "archive" / "lnd" / "hist",           # run_tower
+    root / "archive" / case / "lnd" / "hist",    # S3 shape, staged locally
+    root / case / "lnd" / "hist",
+    root / "archive" / "archive" / case / "lnd" / "hist",   # reference copies
+]
+# run_neon_v2 writes archive/&lt;site&gt;/&lt;control|VAR_VALUE&gt;/lnd/hist
+globbed = sorted(root.glob(f"archive/{neon_site}/*/lnd/hist"))</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>Instead of one hardcoded directory, the code checks a short list of
+      known locations and uses the first that contains matching files.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>Where results land depends on which wrapper ran the simulation.
+      <span class="k">run_tower</span> archives a single case flat;
+      <span class="k">run_neon_v2.py</span>, which is what the Hubs drive,
+      inserts a site segment and an experiment segment so a perturbed run and
+      its control stay separate. A scientist should not have to know which tool
+      wrote their data in order to open it.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>This absorbs a real inconsistency instead of propagating it to every
+      caller. The tradeoff is that adding a layout means editing this list, and
+      a wrong-but-populated directory earlier in the list would win over the
+      right one later.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p>The <span class="k">run_neon_v2</span> root derives from
+      <span class="k">dirname(base_case_root)</span>, <em>not</em> from
+      <span class="k">output_root</span> — the two are not interchangeable, and
+      assuming they are is what produced the wrong path in the data contract.</p></div>
+  </div>
+
+  <div class="change" id="c3">
+    <div class="change-head">
+      <span class="change-num">CHANGE 3 OF 8</span>
+      <h3>A file-list primitive that fails loudly</h3>
+      <span class="change-loc">data_access.py:291</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; no equivalent existed</figcaption>
+<pre><code>(callers globbed inline, or got an empty
+ list back with no explanation)</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:332</figcaption>
+<pre><code>raise FileNotFoundError(
+    f"No CTSM {stream} history files for site={neon_site}, "
+    f"year={year if year is not None else 'any'} under {root}.\n"
+    "Tried:\n  " + "\n  ".join(tried)
+)</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>One function returns the sorted list of matching files. When it finds
+      nothing it raises, naming every directory and pattern it attempted.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>The dangerous failure is not a crash, it is silence: an empty match
+      flows downstream and reads as "this site has no data for that year",
+      which is a plausible scientific statement and a false one. Someone can
+      lose an afternoon to that.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Returning paths rather than a Dataset matters, because the evaluation
+      helpers in <span class="k">neon_eval_utils</span> consume file lists. A
+      Dataset-only interface would have left Hubs 2 and 3 keeping their own
+      globs, which is most of what Phase 1 was trying to eliminate.</p></div>
+  </div>
+
+  <div class="change" id="c4">
+    <div class="change-head">
+      <span class="change-num">CHANGE 4 OF 8</span>
+      <h3>Choose the reader from the file's magic number</h3>
+      <span class="change-loc">data_access.py:339</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; data_access.py:161</figcaption>
+<pre><code>engine: str = "scipy",   # NetCDF-3 reader (CDF\x01/CDF\x02)</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:349</figcaption>
+<pre><code>with open(path, "rb") as handle:
+    magic = handle.read(4)
+return "scipy" if magic in (b"CDF\x01", b"CDF\x02") else "netcdf4"</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>Reads the first four bytes of a file to identify its format, then picks
+      the matching reader library.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>NetCDF is the standard container format for climate data, and it has
+      several on-disk variants. Live output is <strong>CDF-5</strong>
+      (<span class="k">b'CDF\x05'</span>, verified on disk), a 64-bit variant
+      that the <span class="k">scipy</span> reader cannot open at all. The
+      reference copies are CDF-2, which it can. The plan guessed the live files
+      were NetCDF-4 and suggested <span class="k">h5netcdf</span> as the remedy;
+      that would also have failed, because CDF-5 is not HDF5.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Sniffing means no per-source configuration and no guessing when a third
+      format appears. The <span class="k">scipy</span> branch is kept rather
+      than always using <span class="k">netcdf4</span> because the S3 path
+      feeds fsspec file objects, which the netcdf4 engine cannot consume.</p></div>
+  </div>
+
+  <div class="change" id="c5">
+    <div class="change-head">
+      <span class="change-num">CHANGE 5 OF 8</span>
+      <h3>The source-agnostic entry point</h3>
+      <span class="change-loc">data_access.py:353, 386, 394</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; only an S3 reader existed</figcaption>
+<pre><code>open_ctsm_hist_from_s3(input_label, s3_client,
+                       bucket_name, neon_site, year, ...)</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:394</figcaption>
+<pre><code>if resolve_source(source) == "s3":
+    return open_ctsm_hist_from_s3(...)
+return open_ctsm_hist_local(
+    neon_site, year, output_root=output_root, stream=stream,
+    input_label=input_label, **kwargs
+)</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>One call, <span class="k">open_ctsm_hist(site, year)</span>, works
+      whichever source the data is in. It resolves to local unless told
+      otherwise via the <span class="k">CTSM_DATA_SOURCE</span> environment
+      variable or an explicit argument.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>A researcher pulling the container can open simulation output with no
+      credentials and no setup. Reaching the shared S3 fixtures becomes the
+      deliberate exception rather than the default path.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>The S3 functions are untouched and still work, so this adds a layer
+      rather than replacing one. Credentials were already requested lazily, so
+      nothing had to change to make them optional — the plan's Task 4 was
+      effectively already done in the library.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p><span class="k">CTSM_OUTPUT_ROOT</span> defaults to
+      <span class="k">/home/user</span>, which is right inside the container and
+      wrong on a development host, where it must be set explicitly. The plan
+      never pinned this default, so it is a decision made here rather than one
+      handed down.</p></div>
+  </div>
+
+  <div class="change" id="c6">
+    <div class="change-head">
+      <span class="change-num">CHANGE 6 OF 8</span>
+      <h3>Revive the dead local branch in the soil-profile plot</h3>
+      <span class="change-loc">data_access.py:470</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; data_access.py:280-286</figcaption>
+<pre><code>sim_path = f"s3://clm-demonstration/archive_1/{neon_site}.transient/lnd/hist/"
+...
+is_s3 = isinstance(sim_path, str) and sim_path.startswith("s3://")</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; data_access.py:470</figcaption>
+<pre><code>is_s3 = resolve_source(source) == "s3"</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>The function decided whether it was reading S3 by testing a string it
+      had assigned itself four lines earlier. That string always began with
+      <span class="k">s3://</span>, so the test was always true and the local
+      branch beneath it — around sixty lines — had never once executed. The
+      decision now comes from the same source resolution everything else
+      uses.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>Soil temperature and moisture profiles are the headline output of Hub
+      1. This is the function that draws them, and it could only ever draw them
+      from S3.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Dead code that looks live is worse than absent code: the plan cited
+      this local branch as evidence the rebind would be easy. It was never
+      evidence of anything, because it had never run.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p>That branch samples one timestep per file with
+      <span class="k">isel(time=24)</span>, assuming 48 half-hourly steps. It is
+      now clamped to the file length, but this path is newly live and has had
+      far less exercise than the code around it.</p></div>
+  </div>
+
+  <div class="change" id="c7">
+    <div class="change-head">
+      <span class="change-num">CHANGE 7 OF 8</span>
+      <h3>Parameterise the stream token on the two S3 readers</h3>
+      <span class="change-loc">data_access.py:161 &middot; neon_notebook_wrapper.py:26</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; neon_notebook_wrapper.py:34</figcaption>
+<pre><code>pattern = f"{neon_site}.transient.clm2.h1.{year}*.nc"</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; neon_notebook_wrapper.py:39</figcaption>
+<pre><code>stream_token: str = "h1",   # S3 copies predate the h1a/h0a rename
+...
+pattern = f"{neon_site}.transient.clm2.{stream_token}.{year}*.nc"</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>The token becomes an argument, with the default left at
+      <span class="k">h1</span>. Behaviour is unchanged.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>No domain consequence. The S3 bucket genuinely holds old-generation
+      files, so <span class="k">h1</span> is the correct thing to look for
+      there.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>Worth stating plainly: <strong>the plan's instruction to change
+      <span class="k">h1</span> to <span class="k">h1a</span> "in both files"
+      would have broken the S3 path.</strong> The stale-looking token was
+      correct in this context. Only live local reads needed the new name.</p></div>
+    <div class="block watch"><h4>Watch out for</h4>
+      <p><span class="k">neon_notebook_wrapper.py:34</span> was the third
+      occurrence of this pattern and is named in neither the issue nor the plan.
+      It is re-exported publicly from the package.</p></div>
+  </div>
+
+  <div class="change" id="c8">
+    <div class="change-head">
+      <span class="change-num">CHANGE 8 OF 8</span>
+      <h3>Tests at the reader boundary</h3>
+      <span class="change-loc">tests/test_data_access_local.py (new, 128 lines)</span>
+    </div>
+    <div class="code-pair">
+      <figure class="code today"><figcaption>Before &middot; no coverage of data_access.py</figcaption>
+<pre><code>(none)</code></pre></figure>
+      <figure class="code proposed"><figcaption>After &middot; test_data_access_local.py:107</figcaption>
+<pre><code>def test_opens_non_empty_dataset(self):
+    dataset = open_ctsm_hist("KONZ", 2018, output_root=LIVE_ROOT)
+    assert dataset.sizes.get("time", 0) &gt; 0
+    assert {"TSOI", "H2OSOI", "GPP"} &amp; set(dataset.variables)</code></pre></figure>
+    </div>
+    <div class="block plainly"><h4>What it does, plainly</h4>
+      <p>Fifteen tests. Assertions are on file counts, stream tokens, and
+      non-zero time length rather than on calls merely not raising. Tests that
+      need real simulation output skip when it is absent.</p></div>
+    <div class="block domain"><h4>Why it matters to the domain</h4>
+      <p>Verified against actual output: KONZ 2018 gives 365 daily files and
+      17,520 half-hourly timesteps with TSOI, H2OSOI and GPP present, and the
+      CLBJ 2019 reference copies read too.</p></div>
+    <div class="block swe"><h4>Why it matters to the codebase</h4>
+      <p>The plan specified no test coverage. Asserting non-emptiness is the
+      whole point — a test that only checks "did not raise" would pass against
+      an empty glob, which is the exact bug being fixed.</p></div>
+  </div>
+
+  <h2>Cross-cutting ramifications</h2>
+  <p>Two naming conventions and four archive layouts are now permanently
+  supported, not transitionally. Phase 5 validates live output against the
+  legacy reference copies, so both must stay readable for as long as that
+  validation matters. Anyone "cleaning up" the probe lists will break it.</p>
+  <p>The discovery logic is now the single place that knows how output is laid
+  out. That is the point, but it means a layout this list does not know about
+  fails everywhere at once rather than in one caller.</p>
+
+  <h2>Where the plan and the code disagreed</h2>
+  <table>
+    <thead><tr><th>Item</th><th>Status</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td>Change <span class="k">h1</span>→<span class="k">h1a</span> in both files</td><td><span class="tag tag-red">Would break S3</span></td><td>S3 and reference data legitimately use <span class="k">h1</span>. Resolved by probing instead of switching.</td></tr>
+      <tr><td>Engine "may be NetCDF-4"; try <span class="k">h5netcdf</span></td><td><span class="tag tag-red">Both wrong</span></td><td>Live output is CDF-5. Neither <span class="k">scipy</span> nor <span class="k">h5netcdf</span> can read it; <span class="k">netcdf4</span> can.</td></tr>
+      <tr><td>Live path is <span class="k">{output_root}/archive/lnd/hist/</span></td><td><span class="tag tag-red">Wrong for the Hubs</span></td><td><span class="k">run_neon_v2.py:1086-1089</span> uses <span class="k">{dirname(base_case_root)}/archive/{site}/{exp}/</span>. Data contract corrected in <span class="k">ebf68fc</span>.</td></tr>
+      <tr><td>Two files need the fix</td><td><span class="tag tag-amber">Three</span></td><td><span class="k">neon_notebook_wrapper.py:34</span> is named nowhere in the plan or issue.</td></tr>
+      <tr><td>Task 4: stop requiring COS credentials</td><td><span class="tag tag-green">Already true</span></td><td>The library was already lazy. The eager check is a notebook cell, so Phase 2.</td></tr>
+      <tr><td>Local branch in the plotting helper proves the rebind is easy</td><td><span class="tag tag-red">Dead code</span></td><td>Unreachable since <span class="k">is_s3</span> was derived from a literal. Never executed.</td></tr>
+      <tr><td>Fixtures live in <span class="k">tests/fixtures/reference_output/</span></td><td><span class="tag tag-amber">Actually elsewhere</span></td><td>They are at <span class="k">archive/archive/{CASE}/lnd/hist/</span>, gitignored.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn">
+    <p><strong>Not caused by this change, but it will bite Phase 2.</strong> The
+    container ships a baked copy of <span class="k">analytics_modules</span> at
+    <span class="k">/opt/analytics_modules</span>, which shadows the repository
+    on <span class="k">sys.path</span>. Editing the working tree changes nothing
+    a notebook imports unless <span class="k">PYTHONPATH</span> points at it.
+    This surfaced while testing.</p>
+  </div>
+
+  <h2>Questions for the author</h2>
+  <table>
+    <thead><tr><th>Question</th><th>Why it needs you</th></tr></thead>
+    <tbody>
+      <tr><td>Is <span class="k">/home/user</span> the right default for <span class="k">CTSM_OUTPUT_ROOT</span>?</td><td>Correct in-container, requires setting on a dev host. The plan never pinned it, so this default was chosen here.</td></tr>
+      <tr><td>Should <span class="k">run_neon_v2.py</span>'s forked copy of these readers be deleted rather than maintained in parallel?</td><td>It duplicates roughly 200 lines and shares the interpreter. Deleting collapses future fixes to one place, but touches the simulation driver.</td></tr>
+      <tr><td>Should the reference copies move to the location the plan documents?</td><td>They sit at <span class="k">archive/archive/</span> while the plan and Phase 0 both say <span class="k">tests/fixtures/reference_output/</span>. The probe list currently supports both.</td></tr>
+      <tr><td>Keep the residual hardcoded <span class="k">h1</span> in the plotting helper's S3 branch?</td><td><span class="k">data_access.py:503</span> is correct for S3 but inconsistent with the parameterisation applied elsewhere.</td></tr>
+    </tbody>
+  </table>
+
+</div>
+</body>
+</html>

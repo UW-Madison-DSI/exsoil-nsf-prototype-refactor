@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Full Decision Trail -- ExSOIL NSF Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;700;900&family=Red+Hat+Text:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --uw-red: #C5050C; --uw-red-dark: #9B0000; --uw-black: #121212;
+      --ink: #1C1A19; --ink-soft: #3D3A37; --ink-mute: #5E5852;
+      --bone: #F7F3EC; --cream: #EFE7D6; --mist: #D7D1C4;
+      --white: #FFFFFF; --slate: #2E4756;
+      --font-display: 'Red Hat Display', system-ui, sans-serif;
+      --font-body: 'Red Hat Text', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+      --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 20px;
+      --shadow-md: 0 4px 16px rgba(28,26,25,0.08), 0 1px 2px rgba(28,26,25,0.04);
+      --container: 1200px; --gutter: 32px;
+      --ease-out: cubic-bezier(0.2, 0, 0, 1);
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: var(--font-body); font-size: 1.125rem; line-height: 1.65; color: var(--ink); background: var(--bone); -webkit-font-smoothing: antialiased; }
+    .skip-link { position: absolute; left: -9999px; top: 8px; z-index: 10000; background: var(--uw-red); color: var(--white); padding: 12px 20px; border-radius: var(--radius-md); font-family: var(--font-display); font-weight: 700; text-decoration: none; }
+    .skip-link:focus { left: 16px; }
+    .global-bar { background: var(--white); border-bottom: 1px solid var(--mist); padding: 10px var(--gutter); font-family: var(--font-display); font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.02em; }
+    .global-bar a { color: var(--ink); text-decoration: none; }
+    .global-bar a:hover { text-decoration: underline; }
+    .page-header { background: var(--cream); padding: 56px var(--gutter) 48px; }
+    .page-header-inner { max-width: var(--container); margin: 0 auto; }
+    .page-header .eyebrow { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-mute); margin-bottom: 12px; }
+    .page-header h1 { font-family: var(--font-display); font-weight: 900; font-size: clamp(2rem, 4vw, 3rem); line-height: 1.05; letter-spacing: -0.02em; color: var(--ink); margin: 0 0 16px; }
+    .page-header .lead { font-size: 1.25rem; line-height: 1.55; color: var(--ink-soft); max-width: 680px; }
+    .container { max-width: var(--container); margin: 0 auto; padding: 0 var(--gutter); }
+    .narrow { max-width: 800px; margin: 0 auto; }
+    h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); font-weight: 700; color: var(--ink); margin: 0; line-height: 1.15; letter-spacing: -0.02em; }
+    h2 { font-size: 2.25rem; margin-top: 64px; margin-bottom: 16px; }
+    h3 { font-size: 1.875rem; margin-top: 48px; margin-bottom: 12px; letter-spacing: -0.01em; }
+    h4 { font-size: 1.5rem; margin-top: 32px; margin-bottom: 8px; font-weight: 500; }
+    h5 { font-size: 1.25rem; margin-top: 24px; margin-bottom: 8px; font-weight: 500; }
+    p { margin: 0 0 16px; }
+    li { margin-bottom: 8px; }
+    strong, b { font-weight: 640; }
+    a { color: var(--slate); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; color: var(--ink); }
+    code { font-family: var(--font-mono); font-size: 0.92em; background: var(--cream); padding: 2px 6px; border-radius: var(--radius-sm); }
+    pre { background: var(--cream); padding: 24px; border-radius: var(--radius-md); overflow-x: auto; font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.5; margin: 16px 0 24px; }
+    pre code { background: transparent; padding: 0; }
+    hr { border: 0; border-top: 1px solid var(--mist); margin: 64px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 1rem; }
+    th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--mist); }
+    th { font-family: var(--font-mono); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-mute); border-bottom: 2px solid var(--mist); }
+    tr:last-child td { border-bottom: none; }
+    blockquote { border-left: 3px solid var(--uw-red); padding-left: 20px; margin: 24px 0; color: var(--ink-soft); font-style: italic; }
+    img { max-width: 100%; border-radius: var(--radius-lg); }
+    figure { margin: 32px 0; text-align: center; }
+    figcaption { font-size: 0.875rem; color: var(--ink-mute); margin-top: 12px; }
+    .dsi-footer { background: var(--ink); color: var(--mist); padding: 48px var(--gutter) 32px; margin-top: 96px; font-size: 0.875rem; }
+    .dsi-footer a { color: var(--mist); text-decoration-thickness: 1px; }
+    .dsi-footer a:hover { color: var(--white); }
+    .footer-inner { max-width: var(--container); margin: 0 auto; display: flex; justify-content: space-between; align-items: flex-start; gap: 32px; flex-wrap: wrap; }
+    .footer-brand { font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: var(--white); }
+    .footer-brand .sub { font-weight: 400; font-size: 0.875rem; color: var(--mist); display: block; margin-top: 4px; }
+    .footer-copyright { max-width: var(--container); margin: 24px auto 0; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.8125rem; color: var(--ink-mute); }
+    @media print { .global-bar, .dsi-footer { display: none; } body { background: white; font-size: 10pt; } .container { max-width: none; padding: 0; } pre { white-space: pre-wrap; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0ms !important; transition-duration: 0ms !important; } }
+    @media (max-width: 768px) { .container { padding: 0 20px; } .page-header { padding: 32px 20px 28px; } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <div class="global-bar"><a href="https://www.wisc.edu">University of Wisconsin-Madison</a></div>
+  <div class="page-header">
+    <div class="page-header-inner">
+      <div class="eyebrow">ExSOIL NSF Prototype &middot; Decisions</div>
+      <h1>Full decision trail</h1>
+      <p class="lead">From the initial ARM64 problem through the CTSM migration and data resolution.</p>
+      <p style="font-size: 0.875rem; color: var(--ink-mute); margin-top: 8px;">Data Science Institute, UW-Madison</p>
+    </div>
+  </div>
+  <main id="main" tabindex="-1"><div class="container narrow">
+<h2 id="the-starting-problem-amd64-container-on-arm64-hardware">1. The
+starting problem: amd64 container on arm64 hardware</h2>
+<p><strong>What we had:</strong> A Docker container based on
+<code>escomp/cesm-lab-neon</code>, published by NCAR around 2022. It ran
+CESM 2.2 with the NEON tower site workflow, shipped Python 3.7, and was
+built exclusively for Intel/AMD processors (amd64).</p>
+<p><strong>What broke:</strong> Team members on Apple Silicon Macs
+(M1-M4) had to run the container through QEMU emulation, which
+translated Intel instructions to ARM on the fly. This was 2-3x slower
+than native execution and caused frequent kernel crashes, particularly
+during computationally intensive operations like cartopy map rendering
+and Fortran compilation. Local development was effectively unusable.</p>
+<p><strong>Decision:</strong> Rebuild the container from scratch with
+native arm64 support.</p>
+<p><strong>Reference:</strong> <a
+href="../adr/0001-arm64-base-image.md">ADR-0001</a> (base image), <a
+href="../adr/0002-arm64-build-strategy.md">ADR-0002</a> (build
+strategy)</p>
+<hr />
+<h2 id="choosing-a-new-base-image">2. Choosing a new base image</h2>
+<p><strong>Options evaluated:</strong> Ubuntu 24.04, AlmaLinux 9, Rocky
+Linux 9, Debian 12, jupyter/scipy-notebook, condaforge/miniforge3.</p>
+<p><strong>What we learned:</strong> Both Pangeo and Jupyter Docker
+Stacks have standardized on Ubuntu 24.04 for scientific Python
+containers. It has the longest free support (2029), the smallest base
+(~29 MB), native arm64 manifests, and the best-documented path for
+Fortran/C compilation.</p>
+<p><strong>Decision:</strong> Ubuntu 24.04 LTS.</p>
+<p><strong>What this led to:</strong> All
+<code>yum</code>/<code>dnf</code> commands from the old CentOS image
+needed translation to <code>apt-get</code>, but the scope was smaller
+than expected because most scientific libraries moved to conda-forge
+(see next step).</p>
+<p><strong>Reference:</strong> <a
+href="../adr/0001-arm64-base-image.md">ADR-0001</a></p>
+<hr />
+<h2 id="eliminating-source-compilation">3. Eliminating source
+compilation</h2>
+<p><strong>What we had:</strong> The upstream image hand-compiled MPICH
+3.3.2, HDF5 1.12.0, NetCDF-C 4.7.4, NetCDF-Fortran 4.5.3, and PNetCDF
+1.12.1 from source. This took 30-45 minutes and was the primary source
+of architecture-specific build failures.</p>
+<p><strong>What we learned:</strong> All of these libraries are
+available as pre-built conda-forge binaries for both amd64 and arm64.
+Using conda-forge also ensures ABI consistency across the MPI stack
+(MPICH, mpi4py, ESMF, NetCDF all from the same build chain).</p>
+<p><strong>Decision:</strong> Replace source compilation with
+conda-forge binaries. Use conda-lock for reproducible cross-platform
+lockfiles.</p>
+<p><strong>What this led to:</strong> Build time dropped from ~45
+minutes to ~5 minutes. Eliminated the entire “compile C/Fortran
+libraries” stage of the Dockerfile.</p>
+<p><strong>Reference:</strong> <a
+href="../adr/0003-conda-environment-strategy.md">ADR-0003</a>, <a
+href="../adr/0004-distributed-computing-support.md">ADR-0004</a></p>
+<hr />
+<h2 id="thirteen-compatibility-fixes">4. Thirteen compatibility
+fixes</h2>
+<p><strong>What happened:</strong> Building CESM 2.2.2 with modern
+conda-forge toolchain (GCC 15, NetCDF-C 4.9+, Python 3.11+) on arm64
+exposed 13 separate compatibility issues. Each was discovered through
+the automated test suite and fixed iteratively.</p>
+<p><strong>Key fixes:</strong> - <code>rdtsc</code> x86 assembly in GPTL
+timer (arm64 has no <code>rdtsc</code> instruction) - GCC 10+ strict
+type checking (<code>-fallow-argument-mismatch</code>,
+<code>-fallow-invalid-boz</code>) - NetCDF-C macro rename
+(<code>_FillValue</code> to <code>NC_FillValue</code>) - PIO2 filter API
+mismatch (newer NetCDF headers advertise functions that old PIO2 doesn’t
+implement) - Python 3.12 <code>import imp</code> removal (CIME 2.2.x
+used the deprecated <code>imp</code> module) - cmake 4.x compatibility
+(CESM’s PIO used <code>cmake_minimum_required(VERSION 3.0.2)</code>) -
+Bundled <code>six.py</code> shadowing conda-forge version (broke
+dateutil)</p>
+<p><strong>What this led to:</strong> A 90-test validation suite across
+three tiers (smoke, case creation, build + analysis). All 90 tests
+passing on native arm64.</p>
+<p><strong>Reference:</strong> <a
+href="../adr/0002-arm64-build-strategy.md">ADR-0002 Implementation
+Notes</a>, test suite in <code>tests/</code></p>
+<hr />
+<h2 id="discovering-that-neon-support-was-never-in-cesm-2.x">5.
+Discovering that NEON support was never in CESM 2.x</h2>
+<p><strong>What we expected:</strong> The old container had NEON site
+support, so CESM 2.2.2 should too.</p>
+<p><strong>What we found:</strong>
+<code>run_neon_v2 --neon-sites ABBY</code> failed with “invalid choice:
+‘ABBY’ (choose from ‘all’)”. The NEON usermods directory did not exist
+in CESM 2.2.2’s CLM checkout.</p>
+<p><strong>What the research showed:</strong> The NEON tower workflow
+was developed on CTSM’s master branch starting February 2021 (PR #1278),
+well after the CESM 2.2 release line was cut. No CESM 2.x release has
+ever included NEON support. The original
+<code>escomp/cesm-lab-neon</code> Docker image was a custom,
+undocumented build that grafted a newer CTSM development branch onto a
+CESM 2.2 framework. NEON support will arrive in CESM when version 3.x
+ships (currently in beta, spring 2026 target slipped).</p>
+<p><strong>Decision:</strong> Replace the full CESM framework with
+standalone CTSM.</p>
+<p><strong>What this led to:</strong> ADR-0005 and the evaluation of
+CTSM versions.</p>
+<p><strong>Reference:</strong> <a
+href="001-neon-site-compatibility/001-neon-site-compatibility.md">Decision
+brief 001</a>, <a href="../adr/0005-standalone-ctsm.md">ADR-0005</a></p>
+<hr />
+<h2 id="choosing-standalone-ctsm-over-full-cesm">6. Choosing standalone
+CTSM over full CESM</h2>
+<p><strong>Why CTSM:</strong> NCAR designed and maintains the NEON
+workflow as a CTSM-standalone feature. The project runs CLM in I-compset
+mode (land-only with data atmosphere), which is exactly what standalone
+CTSM is designed for. The full CESM components (CAM, POP, CICE, CISM,
+WW3) were present in the container but never compiled or executed.</p>
+<p><strong>Trade-off:</strong> Losing the ability to run fully coupled
+atmosphere-land-ocean simulations. The project does not currently use
+coupled simulations; all workflows run CLM against observed forcing
+data. If coupled experiments are needed in the future, a separate CESM
+3.x container can be maintained.</p>
+<p><strong>What this led to:</strong> A cleaner, smaller container with
+NEON support natively included.</p>
+<p><strong>Reference:</strong> <a
+href="../adr/0005-standalone-ctsm.md">ADR-0005</a></p>
+<hr />
+<h2 id="ctsm-5.4-vs-5.2-both-blocked-for-different-reasons">7. CTSM 5.4
+vs 5.2: both blocked, for different reasons</h2>
+<p><strong>CTSM 5.4.002 (December 2025):</strong> Container builds
+cleanly, 90/90 tests pass, NEON sites discoverable, case.build produces
+cesm.exe. But live simulation fails: input data download returns 404 for
+several files.</p>
+<p><strong>CTSM 5.2.005 (August 2024):</strong> Expected to have
+established input data. But its older CIME has a Python 3.13 XML parsing
+incompatibility (<code>_Element</code> vs <code>Element</code> type
+error). Would require pinning Python back to 3.11-3.12, undoing work
+from the rebuild.</p>
+<p><strong>Decision:</strong> Stay on CTSM 5.4. Its blocker (missing
+data) is a configuration issue that can be resolved. CTSM 5.2’s blocker
+(Python incompatibility) would require regressions.</p>
+<p><strong>Reference:</strong> <a
+href="002-ctsm-version-selection.md">Decision brief 002</a></p>
+<hr />
+<h2 id="diagnosing-the-data-availability-issue">8. Diagnosing the data
+availability issue</h2>
+<p><strong>Initial hypothesis:</strong> NCAR hadn’t published input data
+for the 5.4 release. Six months after release seemed surprising but
+plausible.</p>
+<p><strong>Server probing:</strong> Tested individual file URLs across
+NCAR’s FTP, SVN, and NEON-specific servers. The NEON surface dataset
+(<code>surfdata_1x1_NEON_KONZ_hist_2000_78pfts_c251023.nc</code>)
+returned 404 on all servers. However, the NEON server hosted
+pre-computed transient run output for 45 sites (daily history files,
+2018-2022), suggesting the data pipeline works internally but public
+serving is incomplete.</p>
+<p><strong>Release notes analysis:</strong> Found the
+<code>CLM_CMIP_ERA</code> flag (cmip7 vs cmip6) and the statement that
+CMIP7 data “are only available through the historical record
+(1850-2023), and are not available for future periods (presently known
+as SSP).”</p>
+<p><strong>NEON usermods inspection:</strong> The NEON defaults set
+<code>DATM_PRESAERO=SSP3-7.0</code> (and similar) because NEON runs
+cover 2018-2021, extending past the historical period. But the IHist
+compset is not technically an SSP compset, so <code>CLM_CMIP_ERA</code>
+defaults to <code>cmip7</code> instead of <code>cmip6</code>.</p>
+<p><strong>Reference:</strong> <a
+href="003-neon-input-data-resolution/003-neon-input-data-resolution.md">Decision
+trail 003</a></p>
+<hr />
+<h2 id="root-cause-clm_cmip_era-mismatch">9. Root cause: CLM_CMIP_ERA
+mismatch</h2>
+<p><strong>Deep research verification:</strong> Multi-source search
+confirmed: - No one has successfully run NEON simulations with
+ctsm5.4.002 in Docker - The <code>escomp/ctsm-neon</code> Docker image
+unchanged since October 2022 - NCAR’s CTSM tutorial skipped 5.4, runs on
+internal cloud with pre-staged data - The EMBER Tutorial 2025 (May 2025)
+jumped from CLM5.1 to CLM6.0 - The <code>CLM_CMIP_ERA</code>
+auto-detection does not account for NEON IHist compsets using SSP-era
+forcing dates</p>
+<p><strong>Root cause:</strong> The NEON IHist compset triggers
+<code>CLM_CMIP_ERA=cmip7</code> (because it’s not an SSP compset), but
+the DATM settings request SSP3-7.0 forcing dates, causing the namelist
+generator to look for CMIP7-era SSP files that have not been
+produced.</p>
+<p><strong>Proposed fix:</strong> Set <code>CLM_CMIP_ERA=cmip6</code>
+explicitly for NEON runs. The release notes say SSP-period data should
+use CMIP6. This is the intended behavior; the auto-detection just
+doesn’t cover the NEON case.</p>
+<p><strong>Status:</strong> Fix identified, not yet tested.</p>
+<p><strong>Reference:</strong> <a
+href="../adr/0006-cmip-era-override-for-neon.md">ADR-0006</a></p>
+<hr />
+<h2 id="clm_cmip_era-fix-insufficient">10. CLM_CMIP_ERA fix:
+insufficient</h2>
+<p><strong>What we tried:</strong> Set <code>CLM_CMIP_ERA=cmip6</code>
+explicitly in <code>run_neon_v2.py</code>. The release notes said
+SSP-period data should use CMIP6.</p>
+<p><strong>What happened:</strong> The fix didn’t change which files the
+namelist generator requested. The same files were missing. The problem
+was broader than the CMIP era flag: many missing files (parameter files,
+snow optics, crop calendars) are not era-dependent at all.</p>
+<p><strong>Reference:</strong> <a
+href="../adr/0006-cmip-era-override-for-neon.md">ADR-0006 test
+results</a></p>
+<hr />
+<h2 id="ncar-data-server-migration-discovery">11. NCAR data server
+migration discovery</h2>
+<p><strong>What we found:</strong> Comparing ctsm5.4.002 to ctsm5.4.043
+(the latest development tag, 41 point releases later), the
+<code>config_inputdata.xml</code> was updated to use NCAR’s new GDEX
+server (<code>osdf-data.gdex.ucar.edu</code>) instead of the old FTP/SVN
+servers. Many filenames also changed (<code>.no_nan_fill</code>
+suffixes, new timestamps).</p>
+<p><strong>The data existed all along.</strong> NCAR migrated their data
+infrastructure between the 5.4.002 release and the current development
+branch. The 5.4.002 release shipped before the config files were updated
+to point at the new server.</p>
+<p><strong>Reference:</strong> <a
+href="decisions/003-neon-input-data-resolution/resolution.md">resolution
+doc</a></p>
+<hr />
+<h2 id="iterative-pre-download-to-resolve-all-input-data">12. Iterative
+pre-download to resolve all input data</h2>
+<p><strong>What we did:</strong> Built a container with ctsm5.4.043,
+which uses the new GDEX server. CIME’s automatic download got most files
+but failed intermittently on some due to the GDEX CDN redirect chain
+(3-hop: GDEX -&gt; OSDF director -&gt; CDN cache). We identified the
+specific files that failed and manually pre-downloaded them using the
+best available server for each (GDEX with retries, SVN, or FTP).</p>
+<p><strong>Results across three rounds:</strong> - Round 1: 10 files
+identified and pre-downloaded (10/10 succeeded) - Round 2: 9 additional
+files discovered and pre-downloaded (9/9 succeeded) - Round 3: All
+global input data resolved. Remaining gap is NEON tower forcing data for
+KONZ past April 2023 (NEON hasn’t published more recent
+observations).</p>
+<p><strong>Key finding:</strong> The data availability issue was never
+about missing data. It was a combination of: (1) stale server
+configuration in the release tag, (2) unreliable CDN downloads from
+NCAR’s new GDEX server, and (3) CIME’s download logic not retrying
+aggressively enough. All files exist on at least one public server.</p>
+<hr />
+<h2 id="current-state">Current state</h2>
+<p><strong>What works:</strong> - Multi-arch container (amd64 + arm64)
+on Ubuntu 24.04 - CTSM 5.4.043 with 48 NEON tower sites - Python 3.13,
+conda-forge scientific stack - 90/90 test suite passing - All global
+input data downloadable (19 files verified across GDEX, SVN, FTP) - NEON
+case creation and setup through case.build - JupyterLab with project
+notebooks - Getting Started notebook (no credentials needed)</p>
+<p><strong>What needs work:</strong> - A robust pre-download script to
+handle the unreliable GDEX CDN (retries + server fallback) so users
+don’t hit download failures - Run period needs to be limited to
+available NEON tower data (~2018-2023 for KONZ; varies by site) -
+Modeling_Hub notebook needs either live simulation output or connection
+to NCAR’s pre-computed data</p>
+<p><strong>Next steps:</strong> Write the pre-download script, run a
+complete simulation end-to-end, evaluate caching options for
+workshop/classroom use. See <a href="../ROADMAP.md">ROADMAP.md</a>.</p>
+  </div></main>
+  <footer class="dsi-footer">
+    <div class="footer-inner">
+      <div><div class="footer-brand">Data Science Institute<span class="sub">University of Wisconsin-Madison</span></div></div>
+      <div><a href="mailto:srwangen@wisc.edu">srwangen@wisc.edu</a></div>
+    </div>
+    <div class="footer-copyright">&copy; 2026 Board of Regents of the University of Wisconsin System.</div>
+  </footer>
+</body>
+</html>

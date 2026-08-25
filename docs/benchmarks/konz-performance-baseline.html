@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KONZ Performance Baseline &mdash; ExSOIL NSF Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;700;900&family=Red+Hat+Text:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --uw-red: #C5050C; --uw-red-dark: #9B0000;
+      --ink: #1C1A19; --ink-soft: #3D3A37; --ink-mute: #5E5852;
+      --bone: #F7F3EC; --cream: #EFE7D6; --mist: #D7D1C4;
+      --white: #FFFFFF; --slate: #2E4756; --wheat: #C9A227;
+      --font-display: 'Red Hat Display', system-ui, sans-serif;
+      --font-body: 'Red Hat Text', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+      --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 20px;
+      --container: 1200px; --gutter: 32px;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: var(--font-body); font-size: 1.0625rem; line-height: 1.55; color: var(--ink); background: var(--bone); -webkit-font-smoothing: antialiased; }
+
+    .skip-link { position: absolute; left: -9999px; top: 8px; z-index: 10000; background: var(--uw-red); color: var(--white); padding: 12px 20px; border-radius: var(--radius-md); font-family: var(--font-display); font-weight: 700; text-decoration: none; }
+    .skip-link:focus { left: 16px; }
+
+    .global-bar { background: var(--white); border-bottom: 1px solid var(--mist); padding: 10px var(--gutter); font-family: var(--font-display); font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.02em; color: var(--ink); }
+    .global-bar a { color: var(--ink); text-decoration: none; }
+
+    .page-header { background: var(--cream); padding: 44px var(--gutter) 36px; }
+    .page-header-inner { max-width: var(--container); margin: 0 auto; }
+    .page-header .eyebrow { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-mute); margin-bottom: 10px; }
+    .page-header h1 { font-family: var(--font-display); font-weight: 900; font-size: clamp(1.9rem, 3.6vw, 2.6rem); line-height: 1.05; letter-spacing: -0.02em; color: var(--ink); margin: 0 0 12px; }
+    .page-header .lead { font-size: 1.125rem; line-height: 1.5; color: var(--ink-soft); max-width: 720px; }
+
+    .container { max-width: var(--container); margin: 0 auto; padding: 0 var(--gutter); }
+    .narrow { max-width: 840px; margin: 0 auto; }
+
+    h1, h2, h3 { font-family: var(--font-display); font-weight: 700; color: var(--ink); margin: 0; line-height: 1.15; letter-spacing: -0.02em; }
+    h2 { font-size: 1.7rem; margin-top: 40px; margin-bottom: 12px; }
+    h3 { font-size: 1.15rem; margin-top: 20px; margin-bottom: 6px; }
+    p { margin: 0 0 12px; }
+    li { margin-bottom: 5px; }
+    strong, b { font-weight: 640; }
+    a { color: var(--slate); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    code { font-family: var(--font-mono); font-size: 0.88em; background: var(--cream); padding: 2px 6px; border-radius: var(--radius-sm); }
+    pre { background: var(--ink); color: #EDE6D8; padding: 16px 20px; border-radius: var(--radius-md); overflow-x: auto; font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; margin: 12px 0 16px; }
+    pre code { background: transparent; padding: 0; color: inherit; }
+
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.95rem; }
+    th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--mist); vertical-align: top; }
+    th { font-family: var(--font-mono); font-weight: 500; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-mute); border-bottom: 2px solid var(--mist); }
+    tr:last-child td { border-bottom: none; }
+    table.kv td:first-child { font-weight: 640; width: 32%; white-space: nowrap; }
+
+    .stats-band { background: var(--white); border: 1px solid var(--mist); border-radius: var(--radius-xl); padding: 22px 28px; margin: 24px 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    @media (max-width: 768px) { .stats-band { grid-template-columns: repeat(2, 1fr); } }
+    .stat-num { font-family: var(--font-display); font-weight: 900; font-size: clamp(1.6rem, 3vw, 2.2rem); color: var(--uw-red); line-height: 1; letter-spacing: -0.02em; }
+    .stat-label { font-size: 0.78rem; color: var(--ink-mute); margin-top: 6px; line-height: 1.35; }
+
+    .callout { background: var(--white); border: 1px solid var(--mist); border-left: 4px solid var(--uw-red); border-radius: var(--radius-md); padding: 14px 20px; margin: 16px 0; }
+    .callout .eq { font-family: var(--font-mono); font-size: 0.95rem; color: var(--ink); display: block; margin: 2px 0 4px; font-weight: 600; }
+    .callout .sub { font-size: 0.88rem; color: var(--ink-mute); }
+
+    .dsi-footer { background: var(--ink); color: var(--mist); padding: 36px var(--gutter) 28px; margin-top: 64px; font-size: 0.85rem; }
+    .footer-inner { max-width: var(--container); margin: 0 auto; display: flex; justify-content: space-between; gap: 32px; flex-wrap: wrap; }
+    .footer-brand { font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: var(--white); }
+    .footer-brand .sub { font-weight: 400; font-size: 0.85rem; color: var(--mist); display: block; margin-top: 4px; }
+    .footer-copyright { max-width: var(--container); margin: 20px auto 0; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.8rem; color: var(--ink-mute); }
+    .dsi-footer a { color: var(--mist); }
+
+    @media print { .global-bar, .dsi-footer { display: none; } body { background: white; font-size: 9.5pt; } .container { max-width: none; padding: 0; } .stats-band, .callout, table, pre { break-inside: avoid; } pre { white-space: pre-wrap; background: #f0f0f0; color: #111; } h2 { margin-top: 22px; } }
+    @media (max-width: 768px) { .container { padding: 0 20px; } .page-header { padding: 28px 20px 24px; } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <div class="global-bar"><a href="https://www.wisc.edu">University of Wisconsin-Madison</a></div>
+
+  <div class="page-header">
+    <div class="page-header-inner">
+      <div class="eyebrow">ExSOIL NSF Prototype &middot; Benchmarks</div>
+      <h1>CTSM container performance baseline &mdash; KONZ</h1>
+      <p class="lead">Wall-clock baseline for a CLM run at one NEON tower site: build cost, model throughput, a cost model, the run-length boundary, and parallelism.</p>
+      <p style="font-size: 0.85rem; color: var(--ink-mute); margin-top: 8px;">June 17, 2026 &middot; Steven Wangen, Data Science Institute &middot; <strong>Draft</strong> &middot; Phases 0&ndash;2 measured</p>
+    </div>
+  </div>
+
+  <main id="main" tabindex="-1">
+    <div class="container narrow">
+
+      <div class="stats-band">
+        <div><div class="stat-num">118 s</div><div class="stat-label">One-time build (compile CLM)</div></div>
+        <div><div class="stat-num">~6 min</div><div class="stat-label">Full 7-yr run (83 mo), build reused</div></div>
+        <div><div class="stat-num">3.2 s</div><div class="stat-label">Per simulated month (steady state)</div></div>
+        <div><div class="stat-num">~8 min</div><div class="stat-label">Full run, fresh container</div></div>
+      </div>
+
+      <h2>Purpose</h2>
+      <p>A wall-clock baseline for running a CLM simulation at one NEON tower site in the rebuilt container, to size researcher expectations, project campaign costs, and inform delivery decisions (local vs. hosted, prebuilt vs. runtime build). KONZ (Konza Prairie, KS) is the site already validated end-to-end in the rebuild, so it is an apples-to-apples reference.</p>
+
+      <h2>Container access</h2>
+      <p>The image is published to GitHub Container Registry with both Intel/AMD and Apple Silicon variants. Docker selects the correct architecture automatically.</p>
+      <pre><code>docker pull ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:v2.0.0-rc4
+docker run --rm -p 8888:8888 ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:v2.0.0-rc4</code></pre>
+      <table class="kv">
+        <tbody>
+          <tr><td>Registry</td><td><code>ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor</code></td></tr>
+          <tr><td>Current tag</td><td><code>v2.0.0-rc4</code></td></tr>
+          <tr><td>Architectures</td><td><code>linux/amd64</code> (Intel/AMD), <code>linux/arm64</code> (Apple Silicon)</td></tr>
+          <tr><td>Image size</td><td>~14.7 GB uncompressed (~7 GB compressed pull)</td></tr>
+          <tr><td>Includes</td><td>CTSM 5.4.043, CLM 6.0, CIME 6.1, ~7.9 GB pre-loaded global input data, Python 3.13 + JupyterLab</td></tr>
+          <tr><td>Source</td><td><a href="https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor">github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor</a></td></tr>
+        </tbody>
+      </table>
+      <p>Global input data is embedded in the image. Only site-specific NEON tower forcing (~150 KB/month, from Google Cloud) downloads at runtime. No NCAR account or credentials needed.</p>
+
+      <h2>Test environment</h2>
+      <table class="kv">
+        <tbody>
+          <tr><td>Image</td><td><code>ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:v2.0.0-rc4</code> (arm64, ~14.7 GB)</td></tr>
+          <tr><td>CTSM</td><td>5.4.043 (CLM 6.0, CIME 6.1)</td></tr>
+          <tr><td>Host</td><td>Apple M3 Pro, 11 cores, 36 GB RAM, macOS 26.2; Docker 29.4.0 (VM: 11 CPUs / ~7.75 GB)</td></tr>
+          <tr><td>Run</td><td>KONZ transient (<code>IHist1PtClm60Bgc</code>), single core (<code>mpiexec -n 1</code>), from published <code>finidat</code></td></tr>
+        </tbody>
+      </table>
+      <p>Timings are wall-clock from CIME <code>CaseStatus</code> and the <code>run_tower</code> wrapper. Input data is embedded, so there is no GDEX/network dependency.</p>
+
+      <div class="callout" style="border-left-color: var(--wheat);">
+        <strong>Note on the image.</strong> These timings were measured on the equivalent local build (<code>exsoil-full:latest</code>), not on the published <code>v2.0.0-rc4</code> tag directly. The two share the same CTSM 5.4.043 / CLM 6.0 / CIME 6.1 stack and embedded input data, so the numbers should carry over, but <code>v2.0.0-rc4</code> has not been separately re-timed.
+      </div>
+
+      <h2>Results</h2>
+      <table>
+        <thead><tr><th>Measurement</th><th>Wall-clock</th></tr></thead>
+        <tbody>
+          <tr><td>Base-case build (compile CLM) &mdash; <strong>one-time</strong></td><td><strong>118 s</strong></td></tr>
+          <tr><td>Model run, 12 simulated months</td><td>108 s</td></tr>
+          <tr><td><strong>Model run, full 83 months</strong> (2018-01 &rarr; 2024-11)</td><td><strong>337 s</strong></td></tr>
+          <tr><td>Full run, <code>run_tower</code> wrapper (clone &rarr; stage &rarr; run &rarr; archive)</td><td><strong>362 s (~6 min)</strong></td></tr>
+        </tbody>
+      </table>
+      <p>The full run reused the base case via <code>--base-case</code>, so <strong>no recompile occurred</strong>. <code>case.run</code> reported success; coverage is 83 monthly history files with a clean restart at 2024-12-01.</p>
+
+      <div class="callout">
+        <h3 style="margin-top:0;">Cost model</h3>
+        <p class="sub" style="margin-bottom:2px;">The two run lengths (12 mo &rarr; 108 s, 83 mo &rarr; 337 s) fit:</p>
+        <span class="eq">model run ≈ 69 s fixed init + 3.2 s &times; (simulated months)</span>
+        <span class="sub">Steady state ≈ 39 s/simulated-year. A naive linear projection from a short run overestimates &mdash; the short run carries the full ~69 s init cost.</span>
+      </div>
+      <p><strong>Full campaign cost:</strong> ~6 min with the base case already built (hosted / repeat use); ~8 min from a fresh container (adds the one-time 118 s build).</p>
+
+      <h2>STOP_N boundary behavior <span style="font-weight:400;font-size:1rem;color:var(--ink-mute);">(gotcha)</span></h2>
+      <p>KONZ has 84 forcing months (2018-01 &rarr; 2024-12), but a transient run can only cleanly integrate <strong>83</strong> (<code>STOP_N=83</code>). <code>STOP_N=84</code> integrates the full 7 years and then aborts on the <em>final</em> timestep:</p>
+      <pre><code>(shr_strdata_advance) Stream 1: LB ymd = 20241231  UB ymd = 20250101
+(shr_stream_findBounds) ERROR: rDateIn &gt;= rDategvd limit true</code></pre>
+      <p>The run ends at 2025-01-01 00:00 and DATM needs a forcing record beyond that to bracket the last interpolation &mdash; a temporal off-by-one, not a data gap or performance issue. <strong>Guidance:</strong> stop at least one forcing timestep before the last record. Also note <code>run_tower</code>'s exit code is unreliable (returns 0 on <em>submit</em>); the real status is <code>case.run success</code>/<code>error</code> in <code>CaseStatus</code>.</p>
+
+      <h2>The build step: why it runs at runtime, and how often</h2>
+      <p>CLM is compiled at container <em>runtime</em> rather than baked into the image, by deliberate choice (<a href="../adr/0007-qemu-multiarch-ci.md">ADR-0007</a>): the arm64 image is built under QEMU emulation in CI, which handles I/O well but compiles large codebases poorly. The image ships source + toolchain, and CLM compiles natively on first use (~118 s). The cost amortizes to ~zero because the executable persists and is reused.</p>
+      <p>CLM compiles <strong>once</strong> into a base case; every site/run is a <code>create_clone(keepexe=True)</code> that reuses the executable.</p>
+      <ul>
+        <li><strong>Recompiles only when:</strong> no base case exists yet (fresh container); the compset changes (transient <code>IHist1PtClm60Bgc</code> vs. spin-up <code>I1PtClm60Bgc</code> are separate builds); build config changes (compiler, resolution, FATES/BGC, <code>SourceMods</code>); or <code>--overwrite</code>/<code>--clean</code>.</li>
+        <li><strong>No recompile for:</strong> different site, run length/dates (<code>STOP_N</code>, <code>DATM_YR_*</code>), <code>finidat</code>, history output, or forcing/parameter perturbations (all runtime config).</li>
+        <li><strong>Persistence:</strong> the executable lives in the base case <code>bld/</code>. On a mounted volume or hosted instance it survives and is reused via <code>--base-case</code>; in an ephemeral container layer it is lost and the next run recompiles. This is the main lever for eliminating the build cost.</li>
+      </ul>
+
+      <h2>Parallelism</h2>
+      <ul>
+        <li><strong>Within one run &mdash; no.</strong> A NEON run is a single grid column, so there is nothing to decompose (hence <code>mpi-serial</code>, <code>mpiexec -n 1</code>), and the sequential timestepping can't be parallelized. The ~3.2 s/month rate is a serial floor; extra cores idle.</li>
+        <li><strong>Across runs &mdash; yes, embarrassingly parallel.</strong> Independent sites and calibration/perturbation ensembles all share the one <code>cesm.exe</code>, so the pattern is "clone N cases and run concurrently." Throughput ≈ single-run cost ÷ concurrent runs.</li>
+        <li><strong>Constraints:</strong> <code>run_tower</code> runs sites serially in <code>--no-batch</code> mode (concurrency needs separate processes/containers or CIME batch submit); on one machine, memory (the ~7.75 GB VM), not cores, is the likely limiter. At ensemble/multi-site scale this is a scheduler/cloud workload &mdash; the hosted-vs-distributable delivery question.</li>
+      </ul>
+
+      <h2>Caveats &amp; next steps</h2>
+      <p>Single host, single sample per length; the cost model is a two-point fit; throughput is from <code>CaseStatus</code> wall-clock (CIME's internal timer file was not generated for these single-point runs); the amd64 path is unmeasured. Benign log noise: a global default <code>finidat</code> 404 (the NEON KONZ file is used instead) and "Model datm missing file" lines (the pre-run check listing files to download).</p>
+      <p>Optional follow-ups: spot-check a second site; measure amd64; and a concurrency micro-benchmark (2 / 4 / 8 simultaneous runs &rarr; per-run slowdown, peak memory, how many fit in the VM) to get real per-machine ensemble throughput for calibration.</p>
+
+    </div>
+  </main>
+
+  <footer class="dsi-footer">
+    <div class="footer-inner">
+      <div><div class="footer-brand">Data Science Institute<span class="sub">University of Wisconsin-Madison</span></div></div>
+      <div><a href="mailto:srwangen@wisc.edu">srwangen@wisc.edu</a></div>
+    </div>
+    <div class="footer-copyright">&copy; 2026 Board of Regents of the University of Wisconsin System.</div>
+  </footer>
+</body>
+</html>

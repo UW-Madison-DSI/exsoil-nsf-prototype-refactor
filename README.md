@@ -1,104 +1,156 @@
-# exsoil-nsf-prototype-refactor
+# ExSOIL NSF Prototype
 
-Containerized JupyterLab environment for NCAR / NSF / NEON work, built on top of
-[`escomp/cesm-lab-neon`](https://hub.docker.com/r/escomp/cesm-lab-neon). Ships
-the CTSM/CESM toolchain plus this project's analytics modules and notebooks,
-with a GitHub Actions workflow that publishes the image to GHCR on every push.
+A containerized environment for evaluating the Community Land Model
+(CLM) against NEON tower site observations. Researchers run CLM at
+real-world instrumented sites, compare predictions of soil temperature,
+moisture, and carbon fluxes against what the towers actually measured,
+and use statistical techniques (misfit diagnostics, Kalman filter
+calibration) to quantify and reduce model-data disagreement.
 
-## Published image
+The container packages CTSM 5.4 (standalone CLM with the NEON tower
+workflow), a full Fortran build toolchain, and a Python analysis stack
+(xarray, cartopy, matplotlib, JupyterLab) into a single image that
+runs natively on both Intel/AMD and Apple Silicon machines.
 
-`ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor`
+## How the pieces fit together
 
-Tags produced by CI:
+![Version Lineage](docs/ctsm-architecture-guide/lineage-chart.png)
 
-| Tag                | When pushed                                          |
-| ------------------ | ---------------------------------------------------- |
-| `latest`           | every push to `main`                                 |
-| `main`             | every push to `main`                                 |
-| `sha-<short>`      | every push to `main` (immutable, commit-pinned)      |
-| `vX.Y.Z` / `X.Y` / `X` | when a git tag `vX.Y.Z` is pushed                |
-| `pr-<n>`           | on a pull request (built but **not** pushed)         |
+The ExSOIL container is built on **CTSM 5.4** (tag ctsm5.4.043),
+NCAR's standalone land modeling framework. CTSM assembles CLM 6.0
+(the land model code), CIME 6.1 (the build and case management
+system), and the NEON tower workflow (48 site configurations) into
+a single release. Our container adds the arm64/amd64 multi-platform
+build, a conda-forge Python analysis stack, and project-specific
+notebooks and analysis tools on top.
+
+For a detailed guide to the software architecture, see
+[docs/ctsm-architecture-guide](docs/ctsm-architecture-guide/).
+For the full decision trail from the initial ARM64 problem through
+the CTSM migration, see
+[docs/decisions/000-full-decision-trail.md](docs/decisions/000-full-decision-trail.md).
 
 ## Quick start
 
-### Pull and run the published image
-
 ```bash
+docker pull ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
 docker run --rm -p 8888:8888 ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
 ```
 
-Then open <http://127.0.0.1:8888/lab>. The base image ships with JupyterLab
-configured with **no token and no password** (it's intended for local dev), so
-you'll land directly in the lab UI.
+Open the URL printed in the terminal. In JupyterLab, start with
+`notebooks/Getting_Started_CTSM_NEON.ipynb` to verify the environment
+and explore available NEON sites. No credentials needed. Global input
+data (~6 GB) is pre-loaded in the image; only site-specific NEON tower
+forcing downloads at runtime (small, fast).
 
-If the image is still private on GHCR, log in first:
-
-```bash
-echo "$GITHUB_TOKEN" | docker login ghcr.io -u <your-username> --password-stdin
-```
-
-### Build locally
+For the full analysis workflows (which pull data from S3), pass your
+credentials:
 
 ```bash
-docker build --platform linux/amd64 -t cesm-lab-neon-custom:dev .
-docker run --rm -p 8888:8888 cesm-lab-neon-custom:dev
+docker run --rm -p 8888:8888 --env-file .env ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
 ```
 
-`--platform linux/amd64` matters on Apple Silicon: the upstream base image is
-amd64-only, so the container runs through Rosetta emulation.
+See [docs/getting-started.md](docs/getting-started.md) for detailed
+setup instructions.
 
-### Persist your notebooks across runs
+## What is inside
 
-```bash
-docker run --rm -p 8888:8888 \
-  -v "$PWD/notebooks:/home/user/notebooks" \
-  ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
-```
+| Component | What it does |
+|-----------|-------------|
+| **CTSM 5.4** | Standalone Community Terrestrial Systems Model with NEON usermods for 48 tower sites |
+| **CLM** | Community Land Model: simulates soil physics, vegetation, hydrology, carbon cycling |
+| **CIME** | Build and case management: create_newcase, case.setup, case.build, case.submit |
+| **DATM** | Data atmosphere: feeds observed weather to CLM instead of a simulated atmosphere |
+| **Python stack** | xarray, cartopy, matplotlib, scipy, pandas, bokeh, panel, JupyterLab |
+| **analytics_modules** | Project-specific: Kalman filter calibration, model misfit diagnostics, S3 data access |
+| **Compilers** | gfortran, gcc, MPICH, cmake (via conda-forge): build CLM from Fortran source |
+
+## Notebooks
+
+| Notebook | Purpose | Needs credentials? |
+|----------|---------|-------------------|
+| **Getting_Started_CTSM_NEON** | Verify environment, explore NEON sites, create a sample case | No |
+| **Data_Hub** | Load CLM output from S3, soil profile visualization | Yes |
+| **Design_Hub_v2** | Run CLM with forcing perturbations, compare scenarios | Yes |
+| **Modeling_Hub** | Model-data misfit evaluation, Kalman filter calibration | Yes (+ simulation output) |
+| **pft_perturbation_comparison** | Compare control and perturbed PFT runs | Yes |
+
+## Multi-platform support
+
+The container builds for both `linux/amd64` and `linux/arm64`. Docker
+selects the correct architecture automatically. On Apple Silicon Macs,
+the container runs natively with no emulation.
 
 ## Project layout
 
 ```
-.
-├── Dockerfile                       # Extends escomp/cesm-lab-neon
-├── requirements.txt                 # Extra Python deps installed on top of base
-├── notebooks/                       # Custom JupyterLab notebooks (mounted at /home/user/notebooks)
-├── analytics_modules/               # Reusable Python modules (installed at /opt/analytics_modules)
-│   ├── __init__.py
-│   ├── kalman_filter.py             # Kalman calibration for CTSM outputs
-│   └── model_misfit.py              # Residual diagnostics used by kalman_filter
-└── .github/workflows/
-    └── docker-publish.yml           # Build + push to GHCR
+Dockerfile                      3-stage build: base (conda) -> ctsm (model) -> app (notebooks)
+environment.yml                 ~35 direct conda dependencies
+conda-lock.yml                  Pinned versions for both architectures
+ctsm-config/                    Machine config overlay for conda-forge library paths
+notebooks/                      JupyterLab notebooks
+analytics_modules/              Kalman filter, model misfit, data access, LLM tools
+cesm-tools/                     run_neon_v2.py (NEON site simulation wrapper)
+scripts/
+  pre-download-inputdata.sh     Downloads input data with retry/fallback (used to build release)
+  download-release-data.sh      Fetches data from GitHub Release during Docker build
+  create-inputdata-release.sh   Helper to create tarballs and upload a new release
+tests/                          90-test validation suite (tier0 smoke, tier1 case, tier2 build)
+docs/
+  getting-started.md            New user guide
+  ctsm-architecture-guide/      Visual guide + version lineage chart
+  adr/                          10 Architecture Decision Records
+  decisions/                    Decision briefs + investigation trails
+  multiarch-rebuild-report/     Technical report on the multi-arch rebuild
+  project-summary/              NSF progress report
+  ROADMAP.md                    Completed work and planned next steps
+  CHANGELOG.md                  What changed in this release
 ```
 
-## Using the analytics modules in a notebook
+## Documentation
 
-`analytics_modules/` is copied into `/opt/analytics_modules/` and `/opt` is
-added to `PYTHONPATH`, so any notebook in the container can do:
+| Document | Audience | What it covers |
+|----------|----------|---------------|
+| [Getting Started](docs/getting-started.md) | New users | How to run the container and use the notebooks |
+| [Architecture Guide](docs/ctsm-architecture-guide/) | Domain experts | How CESM, CTSM, CLM, CIME, and NEON relate; diagrams |
+| [ADRs](docs/adr/) | Maintainers | Why each technical decision was made |
+| [Rebuild Report](docs/multiarch-rebuild-report/) | Platform engineers | Full technical detail of the multi-arch rebuild |
+| [Roadmap](docs/ROADMAP.md) | Team | What is done, what is next |
 
-```python
-from analytics_modules.kalman_filter import kalman_filter, kalman_gain_bias, calibrate_and_evaluate
+## Building locally
 
-calibrated_df, report = calibrate_and_evaluate(df, col="LE", hour_col="hour")
+```bash
+# Full build with embedded input data (default, ~15 GB image)
+docker build -t exsoil .
+
+# Lightweight build without input data (faster, ~7 GB image)
+docker build --build-arg EMBED_INPUTDATA=false -t exsoil .
+
+# With optional Dask distributed computing stack
+docker build --build-arg INSTALL_DASK_DISTRIBUTED=true -t exsoil .
+
+# Run the test suite
+./tests/run_container_tests.sh tier0 tier1    # quick (6 seconds)
+./tests/run_container_tests.sh                # full including case.build (2 minutes)
 ```
 
-To add another module, drop it into `analytics_modules/` and rebuild — it will
-be importable as `analytics_modules.<your_module>`.
-
-## Adding Python dependencies
-
-Edit `requirements.txt` (one package spec per line, `#` for comments) and
-rebuild. The Dockerfile skips `pip install` when the file only has comments,
-so it's safe to leave empty.
+By default, the build embeds ~6 GB of global CTSM input data from a
+[GitHub Release](https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/releases/tag/inputdata-v5.4.043)
+so simulations can start without downloading from NCAR.
+Use `EMBED_INPUTDATA=false` for development builds where you don't
+need to run simulations.
 
 ## CI/CD
 
-`.github/workflows/docker-publish.yml` runs on every push to `main`, every
-`v*` tag, every pull request (build-only, no push), and on manual dispatch
-from the Actions tab. It uses the built-in `GITHUB_TOKEN` to push to GHCR —
-no secrets to configure.
+`.github/workflows/docker-publish.yml` builds each architecture on a
+separate GitHub Actions runner (amd64 native, arm64 via QEMU), then
+merges them into a multi-arch manifest list. Builds trigger on pushes
+to `main` and on version tags. PR builds skip data embedding for speed.
 
-Cache is stored in GitHub Actions cache (`type=gha`) so unchanged layers
-skip on subsequent builds.
+Images are pushed to
+`ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor`.
+
+Current release: `v2.0.0-rc4` (amd64 + arm64, with embedded input data).
 
 ## License
 

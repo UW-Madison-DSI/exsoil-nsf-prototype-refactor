@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Input Data Resolution -- ExSOIL NSF Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;700;900&family=Red+Hat+Text:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --uw-red: #C5050C; --uw-red-dark: #9B0000; --uw-black: #121212;
+      --ink: #1C1A19; --ink-soft: #3D3A37; --ink-mute: #5E5852;
+      --bone: #F7F3EC; --cream: #EFE7D6; --mist: #D7D1C4;
+      --white: #FFFFFF; --slate: #2E4756;
+      --font-display: 'Red Hat Display', system-ui, sans-serif;
+      --font-body: 'Red Hat Text', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+      --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 20px;
+      --shadow-md: 0 4px 16px rgba(28,26,25,0.08), 0 1px 2px rgba(28,26,25,0.04);
+      --container: 1200px; --gutter: 32px;
+      --ease-out: cubic-bezier(0.2, 0, 0, 1);
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: var(--font-body); font-size: 1.125rem; line-height: 1.65; color: var(--ink); background: var(--bone); -webkit-font-smoothing: antialiased; }
+    .skip-link { position: absolute; left: -9999px; top: 8px; z-index: 10000; background: var(--uw-red); color: var(--white); padding: 12px 20px; border-radius: var(--radius-md); font-family: var(--font-display); font-weight: 700; text-decoration: none; }
+    .skip-link:focus { left: 16px; }
+    .global-bar { background: var(--white); border-bottom: 1px solid var(--mist); padding: 10px var(--gutter); font-family: var(--font-display); font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.02em; }
+    .global-bar a { color: var(--ink); text-decoration: none; }
+    .global-bar a:hover { text-decoration: underline; }
+    .page-header { background: var(--cream); padding: 56px var(--gutter) 48px; }
+    .page-header-inner { max-width: var(--container); margin: 0 auto; }
+    .page-header .eyebrow { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-mute); margin-bottom: 12px; }
+    .page-header h1 { font-family: var(--font-display); font-weight: 900; font-size: clamp(2rem, 4vw, 3rem); line-height: 1.05; letter-spacing: -0.02em; color: var(--ink); margin: 0 0 16px; }
+    .page-header .lead { font-size: 1.25rem; line-height: 1.55; color: var(--ink-soft); max-width: 680px; }
+    .container { max-width: var(--container); margin: 0 auto; padding: 0 var(--gutter); }
+    .narrow { max-width: 800px; margin: 0 auto; }
+    h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); font-weight: 700; color: var(--ink); margin: 0; line-height: 1.15; letter-spacing: -0.02em; }
+    h2 { font-size: 2.25rem; margin-top: 64px; margin-bottom: 16px; }
+    h3 { font-size: 1.875rem; margin-top: 48px; margin-bottom: 12px; letter-spacing: -0.01em; }
+    h4 { font-size: 1.5rem; margin-top: 32px; margin-bottom: 8px; font-weight: 500; }
+    h5 { font-size: 1.25rem; margin-top: 24px; margin-bottom: 8px; font-weight: 500; }
+    p { margin: 0 0 16px; }
+    li { margin-bottom: 8px; }
+    strong, b { font-weight: 640; }
+    a { color: var(--slate); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; color: var(--ink); }
+    code { font-family: var(--font-mono); font-size: 0.92em; background: var(--cream); padding: 2px 6px; border-radius: var(--radius-sm); }
+    pre { background: var(--cream); padding: 24px; border-radius: var(--radius-md); overflow-x: auto; font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.5; margin: 16px 0 24px; }
+    pre code { background: transparent; padding: 0; }
+    hr { border: 0; border-top: 1px solid var(--mist); margin: 64px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 1rem; }
+    th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--mist); }
+    th { font-family: var(--font-mono); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-mute); border-bottom: 2px solid var(--mist); }
+    tr:last-child td { border-bottom: none; }
+    blockquote { border-left: 3px solid var(--uw-red); padding-left: 20px; margin: 24px 0; color: var(--ink-soft); font-style: italic; }
+    img { max-width: 100%; border-radius: var(--radius-lg); }
+    figure { margin: 32px 0; text-align: center; }
+    figcaption { font-size: 0.875rem; color: var(--ink-mute); margin-top: 12px; }
+    .dsi-footer { background: var(--ink); color: var(--mist); padding: 48px var(--gutter) 32px; margin-top: 96px; font-size: 0.875rem; }
+    .dsi-footer a { color: var(--mist); text-decoration-thickness: 1px; }
+    .dsi-footer a:hover { color: var(--white); }
+    .footer-inner { max-width: var(--container); margin: 0 auto; display: flex; justify-content: space-between; align-items: flex-start; gap: 32px; flex-wrap: wrap; }
+    .footer-brand { font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: var(--white); }
+    .footer-brand .sub { font-weight: 400; font-size: 0.875rem; color: var(--mist); display: block; margin-top: 4px; }
+    .footer-copyright { max-width: var(--container); margin: 24px auto 0; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.8125rem; color: var(--ink-mute); }
+    @media print { .global-bar, .dsi-footer { display: none; } body { background: white; font-size: 10pt; } .container { max-width: none; padding: 0; } pre { white-space: pre-wrap; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0ms !important; transition-duration: 0ms !important; } }
+    @media (max-width: 768px) { .container { padding: 0 20px; } .page-header { padding: 32px 20px 28px; } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <div class="global-bar"><a href="https://www.wisc.edu">University of Wisconsin-Madison</a></div>
+  <div class="page-header">
+    <div class="page-header-inner">
+      <div class="eyebrow">ExSOIL NSF Prototype &middot; Decisions</div>
+      <h1>NEON input data resolution</h1>
+      <p class="lead">A plain-language explanation of the data availability issue and how it was resolved.</p>
+      <p style="font-size: 0.875rem; color: var(--ink-mute); margin-top: 8px;">Data Science Institute, UW-Madison</p>
+    </div>
+  </div>
+  <main id="main" tabindex="-1"><div class="container narrow">
+<h2 id="the-short-version">The short version</h2>
+<p>The container has everything installed and working except for one
+problem: when CLM tries to start a simulation, it needs to download
+several large data files from NCAR’s servers. Some of those files don’t
+exist on the servers yet. We know why, and we have a fix to try.</p>
+<h2 id="how-a-simulation-gets-its-data">How a simulation gets its
+data</h2>
+<p>When you tell CLM “run a simulation at the Konza Prairie NEON site
+for the years 2018-2021,” it needs several kinds of input data:</p>
+<p><strong>Surface data files (surfdata):</strong> - Soil properties
+(clay, sand, loam fractions), vegetation type (PFTs), topography, and
+land use history for the grid cell</p>
+<p><strong>Atmospheric forcing data (DATM inputs):</strong> -
+Temperature, humidity, wind speed, precipitation, and solar radiation
+for every time step of the simulation, typically from the NEON tower’s
+own gap-filled observations</p>
+<p><strong>Global forcing and boundary data (CMIP datasets):</strong> -
+Nitrogen deposition (ndep), aerosol deposition (presaero), ozone
+concentrations (preso3), population density (for the fire model), crop
+calendars, and CO2 concentrations - These come from the CMIP (Coupled
+Model Intercomparison Project) data pipeline, which produces
+standardized global datasets used across all climate modeling centers.
+CMIP6 is the established generation; CMIP7 is the new one, still being
+prepared.</p>
+<p>CLM can’t run without all of these. Before a simulation starts, a
+script called <code>check_input_data</code> goes through the list and
+downloads anything that’s missing from NCAR’s public file servers.</p>
+<h2 id="what-goes-wrong">What goes wrong</h2>
+<p>The download script checks NCAR’s servers and several files come back
+as “not found.” The simulation stops before it even begins.</p>
+<p>The files that are missing are the ones describing the global
+background: nitrogen deposition, aerosols, ozone, population density,
+and a few others. The site-specific files and weather data are also
+missing, but for a related reason.</p>
+<h2 id="why-the-files-are-missing">Why the files are missing</h2>
+<p>This requires understanding one piece of climate modeling
+context:</p>
+<p>Climate models use standardized sets of input data that correspond to
+different “eras” of climate research. Right now there are two relevant
+ones:</p>
+<ul>
+<li><p><strong>CMIP6</strong> data: the established set, used for the
+last several years of research. All of these files exist on NCAR’s
+servers.</p></li>
+<li><p><strong>CMIP7</strong> data: the new set, currently being
+prepared for the next generation of climate projections. Some of these
+files exist (the ones covering the historical period, 1850-2023), but
+files covering future scenarios do not exist yet.</p></li>
+</ul>
+<p>CTSM 5.4 introduced a setting called <code>CLM_CMIP_ERA</code> that
+controls which set of files the model asks for. It’s supposed to work
+like this:</p>
+<ul>
+<li><p>If you’re running a <strong>future scenario</strong> simulation
+(called SSP): use CMIP6 data (because CMIP7 future data doesn’t exist
+yet)</p></li>
+<li><p>If you’re running a <strong>historical</strong> simulation: use
+CMIP7 data (because it’s newer and better for the historical
+period)</p></li>
+</ul>
+<p>The NEON tower workflow falls into a gap between these two
+categories.</p>
+<h2 id="the-gap">The gap</h2>
+<p>NEON simulations cover 2018-2021. The historical period in climate
+modeling ends around 2014. So NEON runs extend into the “future
+scenario” time range, even though they’re really just running through
+recent observed years.</p>
+<p>To get data covering 2018-2021, the NEON configuration tells the
+model to use “SSP3-7.0” scenario data (this is just one specific future
+scenario that happens to have data files covering recent years).</p>
+<p>Here’s the problem: the <code>CLM_CMIP_ERA</code> auto-detection
+looks at the simulation type, not the forcing dates. NEON uses a
+simulation type called “IHist” (historical with single-point data).
+Since “IHist” doesn’t have “SSP” in its name, the auto-detection says
+“this is a historical run, use CMIP7 data.”</p>
+<p>But the model then tries to find CMIP7 versions of the SSP3-7.0
+forcing files. Those CMIP7 SSP files don’t exist. They haven’t been
+created yet.</p>
+<p>If the auto-detection had recognized that the NEON case needs
+SSP-period data and switched to CMIP6, it would find the files just
+fine. The CMIP6 versions of all these SSP files are on the servers and
+have been for years.</p>
+<h2 id="the-diagram">The diagram</h2>
+<pre><code>What the NEON case requests:        What auto-detection chooses:
+  Simulation type: IHist        --&gt;   CLM_CMIP_ERA = cmip7  (because IHist != SSP)
+  Forcing dates: 2018-2021      --&gt;   Look for CMIP7 SSP files
+  Forcing scenario: SSP3-7.0         CMIP7 SSP files don&#39;t exist --&gt; FAIL
+
+What should happen:
+  Forcing dates: 2018-2021      --&gt;   These dates need SSP scenario data
+  SSP scenario data             --&gt;   CLM_CMIP_ERA should be cmip6
+  CMIP6 SSP files exist         --&gt;   SUCCESS</code></pre>
+<h2 id="the-fix">The fix</h2>
+<p>Tell the model explicitly: “use CMIP6 data for this run.” One
+line:</p>
+<pre><code>./xmlchange CLM_CMIP_ERA=cmip6</code></pre>
+<p>This isn’t a workaround or a hack. The CTSM 5.4 release notes
+themselves say that SSP-period data should use CMIP6. The auto-detection
+just doesn’t cover the specific case where a non-SSP simulation type
+uses SSP-era forcing dates.</p>
+<h2 id="what-we-still-dont-know">What we still don’t know</h2>
+<p>The <code>CLM_CMIP_ERA=cmip6</code> fix should resolve most of the
+missing files (aerosols, ozone, nitrogen deposition, population
+density). We haven’t tested it yet.</p>
+<p>There’s one file that might not be resolved: the NEON site-specific
+surface dataset (<code>surfdata_1x1_NEON_KONZ_...</code>). This file has
+“ctsm5.4.0” in its name, and there may not be a CMIP6-era equivalent. If
+this file is also missing after the fix, we’ll need to investigate
+whether it’s available on the NEON-specific data server or needs to be
+generated.</p>
+<h2 id="what-works-right-now">What works right now</h2>
+<p>Everything except running the actual simulation:</p>
+<ul>
+<li>The container builds and runs on both Intel/AMD and Apple
+Silicon</li>
+<li>JupyterLab starts, notebooks load</li>
+<li>All Python packages work (xarray, cartopy, matplotlib, etc.)</li>
+<li>CLM compiles from Fortran source (case.build produces an
+executable)</li>
+<li>The NEON site workflow can create and configure cases for 48
+sites</li>
+<li>The Getting Started notebook runs completely</li>
+<li>90 automated tests pass</li>
+</ul>
+<p>The model is ready to go. It just can’t fetch its input data because
+of this configuration mismatch.</p>
+  </div></main>
+  <footer class="dsi-footer">
+    <div class="footer-inner">
+      <div><div class="footer-brand">Data Science Institute<span class="sub">University of Wisconsin-Madison</span></div></div>
+      <div><a href="mailto:srwangen@wisc.edu">srwangen@wisc.edu</a></div>
+    </div>
+    <div class="footer-copyright">&copy; 2026 Board of Regents of the University of Wisconsin System.</div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decision: Input Data Caching via GitHub Release Assets</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;700;900&family=Red+Hat+Text:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --uw-red: #C5050C; --uw-red-dark: #9B0000; --uw-black: #121212;
+      --ink: #1C1A19; --ink-soft: #3D3A37; --ink-mute: #5E5852;
+      --bone: #F7F3EC; --cream: #EFE7D6; --mist: #D7D1C4;
+      --white: #FFFFFF; --slate: #2E4756;
+      --font-display: 'Red Hat Display', system-ui, sans-serif;
+      --font-body: 'Red Hat Text', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+      --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 20px;
+      --shadow-md: 0 4px 16px rgba(28,26,25,0.08), 0 1px 2px rgba(28,26,25,0.04);
+      --container: 1200px; --gutter: 32px;
+      --ease-out: cubic-bezier(0.2, 0, 0, 1);
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: var(--font-body); font-size: 1.125rem; line-height: 1.65; color: var(--ink); background: var(--bone); -webkit-font-smoothing: antialiased; }
+    .skip-link { position: absolute; left: -9999px; top: 8px; z-index: 10000; background: var(--uw-red); color: var(--white); padding: 12px 20px; border-radius: var(--radius-md); font-family: var(--font-display); font-weight: 700; text-decoration: none; }
+    .skip-link:focus { left: 16px; }
+    .global-bar { background: var(--white); border-bottom: 1px solid var(--mist); padding: 10px var(--gutter); font-family: var(--font-display); font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.02em; }
+    .global-bar a { color: var(--ink); text-decoration: none; }
+    .global-bar a:hover { text-decoration: underline; }
+    .page-header { background: var(--cream); padding: 56px var(--gutter) 48px; }
+    .page-header-inner { max-width: var(--container); margin: 0 auto; }
+    .page-header .eyebrow { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-mute); margin-bottom: 12px; }
+    .page-header h1 { font-family: var(--font-display); font-weight: 900; font-size: clamp(2rem, 4vw, 3rem); line-height: 1.05; letter-spacing: -0.02em; color: var(--ink); margin: 0 0 16px; }
+    .page-header .lead { font-size: 1.25rem; line-height: 1.55; color: var(--ink-soft); max-width: 680px; }
+    .container { max-width: var(--container); margin: 0 auto; padding: 0 var(--gutter); }
+    .narrow { max-width: 800px; margin: 0 auto; }
+    h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); font-weight: 700; color: var(--ink); margin: 0; line-height: 1.15; letter-spacing: -0.02em; }
+    h2 { font-size: 2.25rem; margin-top: 64px; margin-bottom: 16px; }
+    h3 { font-size: 1.875rem; margin-top: 48px; margin-bottom: 12px; letter-spacing: -0.01em; }
+    h4 { font-size: 1.5rem; margin-top: 32px; margin-bottom: 8px; font-weight: 500; }
+    p { margin: 0 0 16px; }
+    li { margin-bottom: 8px; }
+    strong, b { font-weight: 640; }
+    a { color: var(--slate); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; color: var(--ink); }
+    code { font-family: var(--font-mono); font-size: 0.92em; background: var(--cream); padding: 2px 6px; border-radius: var(--radius-sm); }
+    pre { background: var(--cream); padding: 24px; border-radius: var(--radius-md); overflow-x: auto; font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.5; margin: 16px 0 24px; }
+    pre code { background: transparent; padding: 0; }
+    hr { border: 0; border-top: 1px solid var(--mist); margin: 64px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 1rem; }
+    th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--mist); }
+    th { font-family: var(--font-mono); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-mute); border-bottom: 2px solid var(--mist); }
+    tr:last-child td { border-bottom: none; }
+    blockquote { border-left: 3px solid var(--uw-red); padding-left: 20px; margin: 24px 0; color: var(--ink-soft); font-style: italic; }
+    img { max-width: 100%; border-radius: var(--radius-lg); }
+    .pill { display: inline-block; font-family: var(--font-mono); font-size: 0.7rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 10px; border-radius: 999px; }
+    .pill-amber { background: #FFF3D6; color: #7A5800; }
+    .dsi-footer { background: var(--ink); color: var(--mist); padding: 48px var(--gutter) 32px; margin-top: 96px; font-size: 0.875rem; }
+    .dsi-footer a { color: var(--mist); text-decoration-thickness: 1px; }
+    .dsi-footer a:hover { color: var(--white); }
+    .footer-inner { max-width: var(--container); margin: 0 auto; display: flex; justify-content: space-between; align-items: flex-start; gap: 32px; flex-wrap: wrap; }
+    .footer-brand { font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: var(--white); }
+    .footer-brand .sub { font-weight: 400; font-size: 0.875rem; color: var(--mist); display: block; margin-top: 4px; }
+    .footer-copyright { max-width: var(--container); margin: 24px auto 0; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.8125rem; color: var(--ink-mute); }
+    @media print { .global-bar, .dsi-footer { display: none; } body { background: white; font-size: 10pt; } .container { max-width: none; padding: 0; } pre { white-space: pre-wrap; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0ms !important; transition-duration: 0ms !important; } }
+    @media (max-width: 768px) { .container { padding: 0 20px; } .page-header { padding: 32px 20px 28px; } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <div class="global-bar"><a href="https://www.wisc.edu">University of Wisconsin-Madison</a></div>
+  <div class="page-header">
+    <div class="page-header-inner">
+      <div class="eyebrow">ExSOIL NSF Prototype &middot; Decisions</div>
+      <h1>Input data caching via GitHub Release assets</h1>
+      <p class="lead">Embed the ~6 GB of global input data in the Docker image by fetching from GitHub's CDN during the build, eliminating the 10-15 minute first-run download.</p>
+      <p style="font-size: 0.875rem; color: var(--ink-mute); margin-top: 8px;"><span class="pill pill-amber">Proposed</span> &middot; June 2026 &middot; Data Science Institute</p>
+    </div>
+  </div>
+  <main id="main" tabindex="-1"><div class="container narrow">
+<h2 id="problem">Problem</h2>
+<p>Every time a researcher starts the container for the first time (or
+on a fresh volume), the pre-download script fetches 31 files totaling ~6
+GB from NCAR’s servers. This is:</p>
+<ol type="1">
+<li><strong>Slow.</strong> 10-15 minutes even when everything
+works.</li>
+<li><strong>Unreliable.</strong> NCAR’s GDEX CDN intermittently fails.
+The pre-download script retries up to 5 times per file with server
+fallback (GDEX, SVN, FTP), but any single download can stall for
+minutes.</li>
+<li><strong>A barrier to adoption.</strong> A researcher who pulls the
+container and tries to run a simulation immediately hits a 15-minute
+wait with opaque wget output. This is the worst possible first
+experience.</li>
+<li><strong>A CI risk.</strong> If we bake data into the image, the
+build depends on NCAR’s servers. A flaky CDN means flaky builds.</li>
+</ol>
+<h2 id="proposed-approach-github-release-assets">Proposed approach:
+GitHub Release assets</h2>
+<p>Store the input data as compressed tarballs attached to a GitHub
+Release in the project repository. The Dockerfile fetches from GitHub’s
+CDN during the build, so the data ships as a Docker layer.</p>
+<h3 id="how-it-works">How it works</h3>
+<p><strong>One-time setup:</strong></p>
+<ol type="1">
+<li>Download all 31 input data files using the existing pre-download
+script (already validated, 100% success rate with retries).</li>
+<li>Organize into 2-3 compressed tarballs grouped by category:
+<ul>
+<li><code>ctsm-inputdata-params-v5.4.043.tar.zst</code> – parameter
+files, snow optics, mesh files (~1.5 GB compressed)</li>
+<li><code>ctsm-inputdata-forcing-v5.4.043.tar.zst</code> – atmospheric
+forcing scenarios, nitrogen deposition, aerosols (~2 GB compressed)</li>
+<li><code>ctsm-inputdata-land-v5.4.043.tar.zst</code> – urban, crop,
+fire, dust, surface data (~0.5 GB compressed)</li>
+</ul></li>
+<li>Create a GitHub Release (e.g., <code>inputdata-v5.4.043</code>) and
+upload the tarballs as release assets.</li>
+<li>Record the download URLs (stable, versioned, served by GitHub’s
+CDN).</li>
+</ol>
+<p><strong>In the Dockerfile:</strong></p>
+<pre class="dockerfile"><code># Stage 2: after CTSM clone, before app layer
+ARG INPUTDATA_RELEASE=https://github.com/UW-Madison-DSI/exsoil-nsf-prototype-refactor/releases/download/inputdata-v5.4.043
+
+RUN mkdir -p /home/user/inputdata \
+    &amp;&amp; for f in ctsm-inputdata-params-v5.4.043.tar.zst \
+                ctsm-inputdata-forcing-v5.4.043.tar.zst \
+                ctsm-inputdata-land-v5.4.043.tar.zst; do \
+         wget -q -O /tmp/$f &quot;${INPUTDATA_RELEASE}/$f&quot; \
+         &amp;&amp; tar --zstd -xf /tmp/$f -C /home/user/inputdata \
+         &amp;&amp; rm /tmp/$f; \
+       done</code></pre>
+<p><strong>Layer caching behavior:</strong></p>
+<ul>
+<li>The data layer is built once and cached. Subsequent builds that only
+change notebooks or scripts reuse it.</li>
+<li>Changing the CTSM version means creating a new release
+(<code>inputdata-v5.4.044</code>) and updating the <code>ARG</code>.
+This triggers a rebuild of the data layer only.</li>
+</ul>
+<h3 id="why-github-release-assets">Why GitHub Release assets</h3>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 30%" />
+<col style="width: 30%" />
+</colgroup>
+<thead>
+<tr>
+<th>Option</th>
+<th>Pros</th>
+<th>Cons</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>GitHub Release assets</strong></td>
+<td>Fast CDN, no extra infrastructure, versioned per CTSM tag, no
+bandwidth metering on public repos, 2 GB per file limit is manageable
+with splitting</td>
+<td>Need to manually upload when CTSM version changes; release assets
+are immutable (good for reproducibility)</td>
+</tr>
+<tr>
+<td><strong>Git LFS</strong></td>
+<td>Integrated with the repo, automatic on clone</td>
+<td>1 GB free storage (we need 6 GB), bandwidth metered ($5/month for 50
+GB), slow build context with large files</td>
+</tr>
+<tr>
+<td><strong>University S3</strong></td>
+<td>Fastest on campus, no external dependency</td>
+<td>Requires infrastructure coordination, not accessible off-campus
+without VPN, another system to maintain</td>
+</tr>
+<tr>
+<td><strong>NCAR GDEX (current)</strong></td>
+<td>No storage cost, always up-to-date</td>
+<td>Unreliable, slow, 3-hop redirect chain, builds are
+non-deterministic</td>
+</tr>
+</tbody>
+</table>
+<p>GitHub Release assets are the best fit because: public repos have no
+bandwidth limits on release downloads, the URLs are stable and
+versioned, GitHub’s CDN is fast globally, and it requires no
+infrastructure beyond what we already use.</p>
+<h3 id="size-estimates">Size estimates</h3>
+<p>The 31 files total ~6 GB uncompressed. Zstandard compression on
+NetCDF data typically achieves 40-60% reduction:</p>
+<table>
+<colgroup>
+<col style="width: 19%" />
+<col style="width: 25%" />
+<col style="width: 41%" />
+<col style="width: 13%" />
+</colgroup>
+<thead>
+<tr>
+<th>Category</th>
+<th>Uncompressed</th>
+<th>Estimated compressed</th>
+<th>Files</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Parameters + mesh + snow</td>
+<td>~2.5 GB</td>
+<td>~1.2 GB</td>
+<td>12 files</td>
+</tr>
+<tr>
+<td>Atmospheric forcing + N-dep</td>
+<td>~3.0 GB</td>
+<td>~1.5 GB</td>
+<td>8 files</td>
+</tr>
+<tr>
+<td>Land surface (urban, crop, fire, dust)</td>
+<td>~0.5 GB</td>
+<td>~0.3 GB</td>
+<td>11 files</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>~6 GB</strong></td>
+<td><strong>~3 GB</strong></td>
+<td><strong>31 files</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Each tarball stays under GitHub’s 2 GB per-asset limit. Total release
+size: ~3 GB.</p>
+<h3 id="image-size-impact">Image size impact</h3>
+<table>
+<thead>
+<tr>
+<th>Configuration</th>
+<th>Uncompressed</th>
+<th>Compressed (registry)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Current (no data)</td>
+<td>~7 GB</td>
+<td>~3 GB</td>
+</tr>
+<tr>
+<td>With embedded data</td>
+<td>~13 GB</td>
+<td>~5-6 GB</td>
+</tr>
+<tr>
+<td>Per architecture in registry</td>
+<td>–</td>
+<td>~5-6 GB each</td>
+</tr>
+<tr>
+<td>Total registry storage per tag</td>
+<td>–</td>
+<td>~10-12 GB</td>
+</tr>
+</tbody>
+</table>
+<h3 id="what-still-downloads-at-runtime">What still downloads at
+runtime</h3>
+<p>Embedding the global data eliminates the 10-15 minute first-run
+download. Two categories still require runtime network access:</p>
+<ul>
+<li><strong>NEON tower forcing</strong> (~150 KB/month per site).
+Downloaded when a researcher picks a site. Fast (Google Cloud), small,
+site-specific. No change needed.</li>
+<li><strong>NEON terrestrial observations</strong> (for model-data
+comparison). Fetched on demand by <code>download_eval_files</code>.
+Variable size, not needed for simulation itself.</li>
+</ul>
+<h3 id="versioning-strategy">Versioning strategy</h3>
+<p>One GitHub Release per CTSM version:</p>
+<ul>
+<li><code>inputdata-v5.4.043</code> – current</li>
+<li><code>inputdata-v5.4.044</code> – when/if we upgrade</li>
+</ul>
+<p>The release tag matches the CTSM tag. The Dockerfile’s
+<code>ARG INPUTDATA_RELEASE</code> points at the right one. Old releases
+stay available for reproducibility.</p>
+<h3 id="maintenance">Maintenance</h3>
+<p>When upgrading CTSM:</p>
+<ol type="1">
+<li>Run the pre-download script against the new version to identify any
+changed files.</li>
+<li>Rebuild the tarballs.</li>
+<li>Create a new GitHub Release with the new tag.</li>
+<li>Update the <code>ARG</code> in the Dockerfile.</li>
+<li>The next build pulls from the new release; old data layer is
+invalidated.</li>
+</ol>
+<p>This is a manual step, but CTSM upgrades are infrequent (we’ve done
+one in the entire project lifetime) and the process is
+straightforward.</p>
+<h3 id="risks">Risks</h3>
+<ul>
+<li><strong>GitHub rate limits on release downloads.</strong> Public
+repos are generous, but a CI pipeline that rebuilds both architectures
+frequently could hit limits. Mitigation: Docker layer caching means the
+download happens once per CTSM version, not per build.</li>
+<li><strong>2 GB per-file limit.</strong> Splitting into 3 tarballs
+handles this comfortably. If a future CTSM version has much larger data
+requirements, we may need more splits.</li>
+<li><strong>GitHub availability.</strong> If GitHub is down, the build
+fails. This is true of any external dependency, and GitHub’s uptime is
+better than NCAR’s GDEX.</li>
+</ul>
+<h3 id="implementation-steps">Implementation steps</h3>
+<ol type="1">
+<li>Run the pre-download script in a container to collect all 31
+files.</li>
+<li>Compress into 2-3 zstd tarballs by category.</li>
+<li>Create a GitHub Release <code>inputdata-v5.4.043</code> and upload
+the tarballs.</li>
+<li>Add the <code>RUN wget + tar</code> block to the Dockerfile (Stage
+2, as its own layer).</li>
+<li>Remove the pre-download script from the runtime startup path (keep
+it as a fallback tool).</li>
+<li>Rebuild, test tier0+tier1+tier2, run end-to-end simulation.</li>
+<li>Update documentation.</li>
+</ol>
+  </div></main>
+  <footer class="dsi-footer">
+    <div class="footer-inner">
+      <div><div class="footer-brand">Data Science Institute<span class="sub">University of Wisconsin-Madison</span></div></div>
+      <div><a href="mailto:srwangen@wisc.edu">srwangen@wisc.edu</a></div>
+    </div>
+    <div class="footer-copyright">&copy; 2026 Board of Regents of the University of Wisconsin System.</div>
+  </footer>
+</body>
+</html>

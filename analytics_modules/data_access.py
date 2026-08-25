@@ -1,14 +1,56 @@
-# ============================================================
-# CTSM NetCDF reader from non-AWS S3 (campus.s3.wisc.edu)
-# Compatible with your existing framework:
-#   - get_s3_client()
-#   - test_s3_connection()
-#   - list_objects_under_prefix()
-#
-# Key detail:
-#   Your files appear to be NetCDF-3 (magic number b'CDF\x02'),
-#   so we use engine="scipy" + file-like handles via fsspec.
-# ============================================================
+"""Locating and opening CTSM history output.
+
+This module is the boundary between simulation output in storage and data an
+analysis notebook can work with. It answers two questions and deliberately
+little else: **where are the history files, and how do I open them?**
+Everything above this layer works in xarray Datasets and stays ignorant of
+paths, buckets, and file formats.
+
+A CTSM run does not produce one result file. It produces thousands of
+*history* files -- NetCDF holding modelled state and fluxes, one per simulated
+day for the daily stream and one per month for the monthly stream. (History is
+output you analyse; *restart* files exist only so a run can resume.) The KONZ
+baseline alone is 5,415 files. Turning those into one continuous time series
+means knowing three things that all vary, which is why this is a module and
+not a one-line glob:
+
+1. **Stream naming.** CTSM 5.4 renamed the streams: daily h1 -> h1a, monthly
+   h0 -> h0a. The S3 fixtures and the reference copies used as a validation
+   oracle predate that rename and keep the old names. Both conventions must
+   stay readable -- this is not a migration that finishes -- so the token is
+   discovered from disk rather than configured. See STREAM_TOKENS.
+
+2. **Archive layout.** Where output lands depends on which wrapper ran the
+   simulation: run_tower archives a single case flat, while run_neon_v2.py
+   (what the Hubs drive) inserts site and experiment segments so a perturbed
+   run and its control stay separate. The reference copies arrived in a third
+   shape. See _candidate_hist_dirs.
+
+3. **On-disk format.** Live CTSM 5.4 output is CDF-5, which the scipy engine
+   cannot read and h5netcdf cannot either, since CDF-5 is not HDF5. The older
+   fixtures are CDF-2, which scipy handles. The engine is chosen per file from
+   its magic number. See _engine_for_local.
+
+Layout
+------
+- S3 plumbing: get_s3_client, test_s3_connection, list_objects_under_prefix,
+  get_storage_options, list_keys, download_keys
+- Reading history: open_ctsm_hist_from_s3 (remote), find_ctsm_hist_files and
+  open_ctsm_hist_local (local)
+- Choosing a source: resolve_source, open_ctsm_hist -- the entry point most
+  callers want. Local by default so a fresh container works with no
+  credentials; S3 is opt-in via CTSM_DATA_SOURCE or an explicit argument.
+- Plotting: plot_soil_profile_timeseries, truncate_colormap. These do not
+  belong here; see the tracking issue for moving them to a visualisation
+  module.
+
+Environment
+-----------
+CTSM_DATA_SOURCE   "local" (default) or "s3"
+CTSM_OUTPUT_ROOT   root under which local output is searched
+COS_ACCESS_KEY_ID / COS_SECRET_ACCESS_KEY
+                   read lazily, and only on the S3 path
+"""
 
 # ============================================================
 # 0. Imports
@@ -31,11 +73,14 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import tqdm
 from glob import glob
-from os.path import join
 
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
-    """Return a sub-range of an existing matplotlib colormap."""
+    """Return a sub-range of an existing matplotlib colormap.
+
+    Soil profile plots use a slice of a colormap rather than the whole thing,
+    so the extremes stay legible against the axes.
+    """
     new_cmap = mcolors.LinearSegmentedColormap.from_list(
         f"trunc({cmap.name},{minval:.2f},{maxval:.2f})",
         cmap(np.linspace(minval, maxval, n)),
@@ -47,12 +92,21 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
 # 1. Create S3 client
 # ============================================================
 
-def get_s3_client():
+def get_s3_client(endpoint_url: str = "https://campus.s3.wisc.edu"):
+    """Build a boto3 client for the UW campus S3 endpoint.
+
+    Credentials come from COS_ACCESS_KEY_ID / COS_SECRET_ACCESS_KEY. boto3
+    does not validate them here, so a missing credential surfaces as an
+    authentication error on first use rather than on construction.
+
+    Path-style addressing is required: the endpoint is not AWS and does not
+    serve virtual-host-style bucket URLs.
+    """
     return boto3.client(
         "s3",
         aws_access_key_id=os.getenv("COS_ACCESS_KEY_ID"),
         aws_secret_access_key=os.getenv("COS_SECRET_ACCESS_KEY"),
-        endpoint_url="https://campus.s3.wisc.edu",
+        endpoint_url=endpoint_url,
         config=Config(s3={"addressing_style": "path"}),
     )
 
@@ -62,6 +116,15 @@ def get_s3_client():
 # ============================================================
 
 def test_s3_connection(s3, bucket_name: str, prefix: str) -> bool:
+    """Report whether a bucket prefix is reachable, printing the outcome.
+
+    Distinguishes three states a notebook user cares about: reachable with
+    data, reachable but empty (usually the wrong prefix rather than a broken
+    connection), and refused. Returns True for both reachable cases, so a
+    True result does not imply the prefix contains anything.
+
+    Intended for interactive use; it prints rather than raising.
+    """
     try:
         resp = s3.list_objects_v2(
             Bucket=bucket_name,
@@ -92,6 +155,18 @@ def list_objects_under_prefix(
     prefix: str,
     dry_run: bool = False,
 ) -> List[str]:
+    """List every object key under a prefix, following pagination.
+
+    S3 returns at most 1000 keys per response, and a site-year of history
+    easily exceeds that, so this follows continuation tokens until the
+    listing is exhausted. Returns sorted keys, which matters because
+    downstream readers concatenate files in listing order to build the time
+    axis.
+
+    Args:
+        dry_run: Stop after the first page. Useful for checking a prefix
+            resolves without paging through thousands of keys.
+    """
     keys: List[str] = []
     token = None
 
@@ -123,10 +198,18 @@ def list_objects_under_prefix(
 def get_storage_options(
     endpoint_url: str = "https://campus.s3.wisc.edu",
 ) -> dict:
-    """
-    fsspec/s3fs options for non-AWS endpoint. Uses env vars:
-      - COS_ACCESS_KEY_ID
-      - COS_SECRET_ACCESS_KEY
+    """Build fsspec/s3fs options for the non-AWS endpoint.
+
+    Separate from get_s3_client because xarray reads through fsspec file
+    objects rather than boto3, and the two want credentials in different
+    shapes.
+
+    This is the one place that requires COS credentials eagerly, and it is
+    only reached on the S3 path -- local reads never call it. That is what
+    lets a fresh container work with no credentials configured.
+
+    Raises:
+        RuntimeError: if either COS_* variable is unset.
     """
     key = os.getenv("COS_ACCESS_KEY_ID")
     secret = os.getenv("COS_SECRET_ACCESS_KEY")
@@ -159,6 +242,7 @@ def open_ctsm_hist_from_s3(
     storage_options: Optional[dict] = None,
     endpoint_url: str = "https://campus.s3.wisc.edu",
     engine: str = "scipy",               # ✅ NetCDF-3 reader (CDF\x01/CDF\x02)
+    stream_token: str = "h1",            # S3 fixtures predate the h1a/h0a rename
     decode_times: bool = True,
     combine: str = "by_coords",
     parallel: bool = False,              # ✅ safer for remote file handles
@@ -177,7 +261,7 @@ def open_ctsm_hist_from_s3(
 
     if input_label == 'transient':
         sim_path = f"archive_1/{neon_site}.transient/lnd/hist/"
-        fname_prefix = f"{neon_site}.transient.clm2.h1.{year}"
+        fname_prefix = f"{neon_site}.transient.clm2.{stream_token}.{year}"
 
     if input_label == 'evaluation':
         sim_path = f"evaluation_files/{neon_site}/{neon_site}_eval_{year}"
@@ -237,34 +321,277 @@ def open_ctsm_hist_from_s3(
     return ds_ctsm
 
 
-def plot_soil_profile_timeseries(neon_site, var, year=None, *,
-                                 endpoint_url="https://campus.s3.wisc.edu",
-                                 storage_options=None):
+# ============================================================
+# 5b. Local (in-container / native) CTSM history access
+# ============================================================
+
+# CTSM 5.4 writes suffixed stream names: h0a monthly, h1a daily. Older output
+# -- including the S3 fixtures and the reference copies used as a validation
+# oracle -- uses unsuffixed h0/h1. Both have to stay readable, so the token is
+# discovered from what is actually on disk rather than assumed. Newest naming
+# is tried first so a directory holding both resolves to the current run.
+STREAM_TOKENS = {
+    "daily": ("h1a", "h1"),
+    "monthly": ("h0a", "h0"),
+}
+
+# Where in-container output lands by default. Override per-environment with
+# CTSM_OUTPUT_ROOT; on a dev host this is typically a baseline archive dir.
+DEFAULT_OUTPUT_ROOT = "/home/user"
+
+SOIL_PROFILE_DROP_VARS = [
+    "ZSOI", "DZSOI", "WATSAT", "SUCSAT", "BSW", "HKSAT",
+    "ZLAKE", "DZLAKE", "PCT_SAND", "PCT_CLAY",
+]
+
+
+def get_output_root() -> Path:
+    """Root under which local CTSM output is searched.
+
+    Reads CTSM_OUTPUT_ROOT, falling back to DEFAULT_OUTPUT_ROOT. The default
+    is correct inside the container and wrong on a development host, where it
+    should point at a completed run's directory -- set the variable there.
+    User home shorthand (~) is expanded.
     """
-    Function for quick visualization of soil profile vs. time.
+    return Path(os.path.expanduser(os.getenv("CTSM_OUTPUT_ROOT", DEFAULT_OUTPUT_ROOT)))
+
+
+def _candidate_hist_dirs(root: Path, neon_site: str, input_label: str) -> List[Path]:
+    """Directories that have all held CTSM history output at some point.
+
+    The project accumulated several archive layouts and none is going away:
+    run_tower archives a single case flat, run_neon_v2 inserts site and
+    experiment segments so perturbed and control runs stay separate, and the
+    reference copies arrived in the S3 per-site shape. Probing is cheaper than
+    making every caller know which tool produced the data it is reading.
+    """
+    case = f"{neon_site}.{input_label}"
+    fixed = [
+        root / "lnd" / "hist",                                  # root is already an archive
+        root / "archive" / "lnd" / "hist",                      # run_tower
+        root / "archive" / case / "lnd" / "hist",               # S3 shape, staged locally
+        root / case / "lnd" / "hist",
+        root / "reference-output" / case / "lnd" / "hist",      # validation oracle
+    ]
+    # run_neon_v2 writes archive/<site>/<control|VAR_VALUE>/lnd/hist
+    globbed = sorted(root.glob(f"archive/{neon_site}/*/lnd/hist"))
+    return fixed + globbed
+
+
+def find_ctsm_hist_files(
+    neon_site: str,
+    year=None,
+    *,
+    output_root=None,
+    stream: str = "daily",
+    input_label: str = "transient",
+) -> List[str]:
+    """Locate local CTSM history files for a site, returning sorted paths.
+
+    Handles both stream naming conventions and every archive layout in use.
+    Returns paths rather than a Dataset because the evaluation and comparison
+    helpers in neon_eval_utils consume file lists.
 
     Args:
-        sim_path (str):
-            Local path OR S3 URL to directory containing simulation files.
-            - Local example: "/path/to/archive_1/ABBY.transient/lnd/hist/"
-            - S3 example:   "s3://clm-demonstration/archive_1/ABBY.transient/lnd/hist/"
-        neon_site (str):
-            Site name (used for plot title)
-        case_name (str):
-            CTSM case file prefix, e.g. "ABBY.transient.clm2"
-        var (str):
-            Variable to create plot for ("TSOI" or "H2OSOI")
-        year (int|str|None):
-            Year to filter files. If None, uses all files.
-        endpoint_url (str):
-            S3 endpoint URL for non-AWS S3 services
-        storage_options (dict|None):
-            Custom storage options for fsspec/s3fs
-        s3_client (boto3.client|None):
-            Pre-configured S3 client (created if None for S3 paths)
+        neon_site: NEON site code, e.g. "KONZ".
+        year: Restrict to one year. None means every year present.
+        output_root: Search root. Defaults to CTSM_OUTPUT_ROOT.
+        stream: "daily" (h1a/h1) or "monthly" (h0a/h0).
+        input_label: Case label, normally "transient".
+
+    Raises:
+        FileNotFoundError: with the directories and patterns tried, since a
+            silent empty list is the failure mode that wastes the most time.
+    """
+    if stream not in STREAM_TOKENS:
+        raise ValueError(f"stream must be one of {sorted(STREAM_TOKENS)}, got {stream!r}")
+
+    root = Path(output_root).expanduser() if output_root else get_output_root()
+    year_glob = f"{year}*" if year is not None else "*"
+    case_name = f"{neon_site}.{input_label}.clm2"
+
+    tried = []
+    for hist_dir in _candidate_hist_dirs(root, neon_site, input_label):
+        for token in STREAM_TOKENS[stream]:
+            pattern = f"{case_name}.{token}.{year_glob}.nc"
+            tried.append(str(hist_dir / pattern))
+            matches = sorted(glob(str(hist_dir / pattern)))
+            if matches:
+                return matches
+
+    raise FileNotFoundError(
+        f"No CTSM {stream} history files for site={neon_site}, "
+        f"year={year if year is not None else 'any'} under {root}.\n"
+        "Tried:\n  " + "\n  ".join(tried)
+    )
+
+
+def _engine_for_local(path: str) -> str:
+    """Pick an xarray engine from the file's magic number.
+
+    CTSM 5.4 writes CDF-5 (b'CDF\\x05', 64-bit offsets), which scipy cannot
+    read -- and h5netcdf cannot either, since CDF-5 is not HDF5. The older
+    fixtures are CDF-2, which scipy handles. netcdf4 reads all of them, so it
+    is the safe default; scipy is kept for CDF-1/2 because it avoids the
+    heavier dependency when the lighter one is sufficient.
+    """
+    with open(path, "rb") as handle:
+        magic = handle.read(4)
+    return "scipy" if magic in (b"CDF\x01", b"CDF\x02") else "netcdf4"
+
+
+def open_ctsm_hist_local(
+    neon_site: str,
+    year=None,
+    *,
+    output_root=None,
+    stream: str = "daily",
+    input_label: str = "transient",
+    drop_variables=None,
+    decode_times: bool = True,
+    combine: str = "by_coords",
+    parallel: bool = False,
+    chunks=None,
+) -> xr.Dataset:
+    """Open local CTSM history output as a single xarray Dataset.
+
+    Locates files with find_ctsm_hist_files, so it inherits the stream and
+    layout discovery described in the module docstring, then concatenates
+    them along time. The reader engine is chosen from the first file's magic
+    number rather than assumed.
+
+    Args:
+        neon_site: NEON site code, e.g. "KONZ".
+        year: Restrict to one year. None reads every year present.
+        output_root: Search root. Defaults to CTSM_OUTPUT_ROOT.
+        stream: "daily" (h1a/h1) or "monthly" (h0a/h0).
+        input_label: Case label, normally "transient".
+        drop_variables: Passed to xarray. Useful for skipping the large
+            static soil-property fields repeated in every file.
 
     Returns:
-        xr.Dataset: The loaded dataset for further analysis
+        xr.Dataset spanning all matched files.
+
+    Raises:
+        FileNotFoundError: if nothing matches, listing the paths tried.
+    """
+    sim_files = find_ctsm_hist_files(
+        neon_site, year, output_root=output_root, stream=stream, input_label=input_label
+    )
+    print(f"All Simulation files: [{len(sim_files)} files]")
+
+    start = time.time()
+    ds_ctsm = xr.open_mfdataset(
+        sim_files,
+        engine=_engine_for_local(sim_files[0]),
+        drop_variables=drop_variables,
+        decode_times=decode_times,
+        combine=combine,
+        parallel=parallel,
+        chunks=chunks,
+    )
+    print(f"Reading all simulation files took: {time.time() - start:.2f} seconds.")
+    return ds_ctsm
+
+
+def resolve_source(source=None) -> str:
+    """Decide whether to read locally or from S3.
+
+    Precedence: explicit argument, then CTSM_DATA_SOURCE, then "local".
+    Local is the default so a freshly pulled container works without
+    credentials or configuration; reaching the shared S3 fixtures is a
+    deliberate opt-in.
+
+    Returns:
+        Either "local" or "s3".
+
+    Raises:
+        ValueError: on any other value, rather than silently falling back --
+            a typo'd source should not quietly read the wrong data.
+    """
+    resolved = (source or os.getenv("CTSM_DATA_SOURCE") or "local").lower()
+    if resolved not in {"local", "s3"}:
+        raise ValueError(f"source must be 'local' or 's3', got {resolved!r}")
+    return resolved
+
+
+def open_ctsm_hist(
+    neon_site: str,
+    year=None,
+    *,
+    source=None,
+    output_root=None,
+    stream: str = "daily",
+    input_label: str = "transient",
+    bucket_name: str = "clm-demonstration",
+    **kwargs,
+) -> xr.Dataset:
+    """Open CTSM history output regardless of where it lives.
+
+    Local by default so a fresh container works with no credentials; pass
+    source="s3" (or set CTSM_DATA_SOURCE=s3) for the original fixtures. S3
+    credentials are only required on the S3 path.
+    """
+    if stream not in STREAM_TOKENS:
+        raise ValueError(f"stream must be one of {sorted(STREAM_TOKENS)}, got {stream!r}")
+
+    if resolve_source(source) == "s3":
+        # The S3 copies predate the CTSM 5.4 rename, so the public stream name
+        # maps to the legacy token -- otherwise stream="monthly" would silently
+        # read daily files. An explicit stream_token still wins.
+        kwargs.setdefault("stream_token", STREAM_TOKENS[stream][-1])
+        # The S3 reader interpolates year straight into the key prefix, so
+        # year=None has to become an empty string (match every year) rather
+        # than the string "None", which matches nothing.
+        return open_ctsm_hist_from_s3(
+            input_label, get_s3_client(), bucket_name, neon_site,
+            "" if year is None else str(year), **kwargs
+        )
+    return open_ctsm_hist_local(
+        neon_site, year, output_root=output_root, stream=stream,
+        input_label=input_label, **kwargs
+    )
+
+
+def plot_soil_profile_timeseries(neon_site, var, year=None, *,
+                                 source=None,
+                                 output_root=None,
+                                 stream: str = "daily",
+                                 stream_token: str = "h1",
+                                 input_label: str = "transient",
+                                 endpoint_url="https://campus.s3.wisc.edu",
+                                 storage_options=None):
+    """Plot a soil profile against time and return the dataset behind it.
+
+    Samples one timestep per file at roughly midday, so it is meant for the
+    daily stream. Reads locally by default; S3 is opt-in through the same
+    source resolution the rest of the module uses.
+
+    Args:
+        neon_site: NEON site code, e.g. "KONZ". Also used in the plot title.
+        var: Variable to plot, "TSOI" (soil temperature, converted to °C) or
+            "H2OSOI" (volumetric soil water).
+        year: Year to filter on. None reads every year present.
+        source: "local" (default) or "s3". Falls back to CTSM_DATA_SOURCE.
+        output_root: Local search root. Defaults to CTSM_OUTPUT_ROOT.
+        stream: "daily" or "monthly", used on the local path where the token
+            is discovered from disk.
+        stream_token: Stream token for the **S3 path only**, where nothing is
+            on local disk to probe. Defaults to the unsuffixed "h1" because
+            the S3 fixtures predate the CTSM 5.4 rename. Matches
+            open_ctsm_hist_from_s3 and neon_notebook_wrapper.list_sim_files_s3.
+        input_label: Case label, normally "transient".
+        endpoint_url: S3 endpoint for non-AWS services.
+        storage_options: fsspec/s3fs options; built from COS credentials if
+            omitted, and only on the S3 path.
+
+    Returns:
+        xr.Dataset: the loaded data, for further analysis.
+
+    Raises:
+        FileNotFoundError: on the local path when nothing matches, listing
+            the paths tried.
+        RuntimeError: on the S3 path when no keys match.
     """
 
     # ---------------------------------------------------
@@ -277,18 +604,23 @@ def plot_soil_profile_timeseries(neon_site, var, year=None, *,
     matplotlib.rc('font', **font)
 
     year_str = str(year) if year is not None else "*"
-    sim_path = f"s3://clm-demonstration/archive_1/{neon_site}.transient/lnd/hist/"
-    case_name = f"{neon_site}.transient.clm2"
+    case_name = f"{neon_site}.{input_label}.clm2"
 
     # ---------------------------------------------------
     # 1) Determine if S3 or local, find files
     # ---------------------------------------------------
-    is_s3 = isinstance(sim_path, str) and sim_path.startswith("s3://")
+    is_s3 = resolve_source(source) == "s3"
+    sim_path = f"s3://clm-demonstration/archive_1/{neon_site}.{input_label}/lnd/hist/"
 
     if not is_s3:
         # ---- LOCAL ----
-        pattern = f"{case_name}.h1.{year_str}*.nc" if year else f"{case_name}.h1.*.nc"
-        sim_files = sorted(glob(join(sim_path, pattern)))
+        # Delegated so this picks up every archive layout and both stream
+        # naming conventions, and raises with what it tried instead of
+        # returning an empty list.
+        sim_files = find_ctsm_hist_files(
+            neon_site, year, output_root=output_root,
+            stream=stream, input_label=input_label,
+        )
         print(f"All Simulation files: [{len(sim_files)} files]")
 
     else:
@@ -310,7 +642,8 @@ def plot_soil_profile_timeseries(neon_site, var, year=None, *,
         keys = list_objects_under_prefix(s3_client, bucket_name, prefix)
 
         # Filter matching files
-        fname_prefix = f"{case_name}.h1.{year_str}" if year else f"{case_name}.h1."
+        fname_prefix = (f"{case_name}.{stream_token}.{year_str}" if year
+                        else f"{case_name}.{stream_token}.")
         sim_keys = sorted(
             k for k in keys
             if k.startswith(prefix + fname_prefix) and k.endswith(".nc")
@@ -330,18 +663,18 @@ def plot_soil_profile_timeseries(neon_site, var, year=None, *,
     # ---------------------------------------------------
     start = time.time()
 
-    drop_vars = [
-        "ZSOI", "DZSOI", "WATSAT", "SUCSAT", "BSW", "HKSAT",
-        "ZLAKE", "DZLAKE", "PCT_SAND", "PCT_CLAY"
-    ]
+    drop_vars = SOIL_PROFILE_DROP_VARS
 
     ds_all = []
 
     if not is_s3:
         # ---- LOCAL ----
+        engine = _engine_for_local(sim_files[0])
         for f in tqdm.tqdm(sim_files, desc="Reading files"):
-            ds_tmp = xr.open_dataset(f, drop_variables=drop_vars)
-            ds_all.append(ds_tmp.isel(time=24))
+            ds_tmp = xr.open_dataset(f, engine=engine, drop_variables=drop_vars)
+            # One sample per file at midday; daily streams carry 48 half-hourly
+            # steps, so clamp rather than assume the file is full-length.
+            ds_all.append(ds_tmp.isel(time=min(24, ds_tmp.sizes["time"] - 1)))
         ds_ctsm = xr.concat(ds_all, dim="time")
 
     else:
@@ -420,17 +753,21 @@ def plot_soil_profile_timeseries(neon_site, var, year=None, *,
     return ds_ctsm
 
 
-## ============================================================
-# Download data from s3
+# ============================================================
+# 7. Bulk download from S3
 # ============================================================
 
-from botocore.exceptions import NoCredentialsError
-
-
 def list_keys(bucket: str, prefix: str, s3, suffix: str) -> list[str]:
-    """
-    List S3 object keys under s3://bucket/prefix.
-    Optionally filter by suffix (e.g. '.nc', '.log').
+    """List object keys under a prefix, skipping directory placeholders.
+
+    Overlaps with list_objects_under_prefix; this one filters by suffix and
+    drops the zero-byte "directory" keys some tools create, which is what the
+    bulk-download helpers want. Prefer list_objects_under_prefix when reading
+    history files.
+
+    Args:
+        suffix: Keep only keys ending with this, e.g. ".nc" or ".log".
+            Falsy values keep everything.
     """
     paginator = s3.get_paginator("list_objects_v2")
     out = []

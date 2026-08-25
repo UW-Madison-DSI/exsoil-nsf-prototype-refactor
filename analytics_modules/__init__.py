@@ -36,6 +36,15 @@ from .data_access import (
     truncate_colormap,
 )
 
+# Source-agnostic CTSM history access (local by default, S3 opt-in)
+from .data_access import (
+    open_ctsm_hist,
+    open_ctsm_hist_local,
+    find_ctsm_hist_files,
+    get_output_root,
+    resolve_source,
+)
+
 # Notebook helpers — optional; only pulls in symbols that exist
 try:
     from .neon_notebook_wrapper import download_sim_files  # noqa: F401
