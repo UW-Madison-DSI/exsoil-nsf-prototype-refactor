@@ -249,7 +249,8 @@ epic #11. Summarized here:
 | Item | Priority | Description |
 |------|----------|-------------|
 | ~~End-to-end NEON simulation test~~ | ~~High~~ | Done. Full KONZ transient produces valid CLM output. |
-| ~~NEON observation pipeline~~ | ~~Medium~~ | Source identified (#12). NCAR/NEON eval files, public and credential-free, 45 monthly files per site covering 2018-01 → 2021-09 for all 5 sites, carrying observed GPP. |
+| ~~Observation source discovery~~ | ~~Medium~~ | Done (#12). NCAR/NEON eval files, public and credential-free, 45 monthly files per site covering 2018-01 → 2021-09 for all 5 sites, carrying observed GPP. Ingestion spec (units, cadence, quality flags) written. |
+| **NEON observation pipeline** | High | Issue #12, still open. Implement the fetch/read helper replacing the unwritten `download_eval_files`, and **settle the negative-GPP filtering policy with Jingyi** — observed GPP goes negative from flux partitioning, and unfiltered values make the misfit numbers meaningless. |
 | **Phase 2: Hub 1 (Data Analysis)** | High | Issue #7. Simplest Hub first, per Maria's recommendation. ~0.5 day. |
 | **Phase 3: Hub 2 (Modeling / Kalman)** | High | Issue #8. Unblocked on data; still needs the negative-GPP filtering policy (#12). ~1 day. |
 | **Extend the fit metrics** | Medium | Add seasonal-cycle and interannual-variability scoring to `compute_fit`, the genuine gap versus ILAMB. See [Goodness-of-fit evaluation](#goodness-of-fit-evaluation) below. |
@@ -263,23 +264,36 @@ Hub 2 currently computes **R², RMSE, MAE, and bias** (`neon_eval_utils.compute_
 plus bias and RMSE ratios against observed standard deviation in
 `residuals_plots`. That covers *magnitude* agreement.
 
-**The gap is timing.** A model can carry almost no average bias while
-peaking in the wrong season, and bias alone scores that as a success.
-For a 45-month GPP series this matters. ILAMB solves it by scoring
-seasonal cycle and interannual variability separately from bias, and
-those two metrics are the part of ILAMB this project actually lacks.
+**The gap is attribution, not detection.** Because `compute_fit` compares
+aligned observation/prediction pairs, a seasonal peak at the wrong time
+*does* already degrade R², RMSE, and MAE — the existing metrics are not
+blind to phase error. What they cannot do is tell you it *was* phase
+error. A single worse RMSE could be amplitude bias, phase shift, noise,
+or a handful of bad months, and the current output gives no way to
+distinguish them.
 
-**Direction: add the metrics, not the framework.** Fold ILAMB-style
-seasonal-cycle and interannual-variability scoring into `compute_fit`
-rather than adopting ILAMB itself. The reasoning is in #13, but briefly:
-ILAMB's value is comparability through its curated global reference
-datasets, and this project evaluates against NEON tower observations
-instead — so running its machinery over our own data forfeits most of
-the benefit that justifies the machinery.
+Separately scoring the **seasonal cycle** (phase and amplitude of the
+mean annual cycle) and **interannual variability** (year-to-year tracking
+of departures from that cycle) turns one undifferentiated number into a
+diagnosis. That is what ILAMB does, and it is the part of ILAMB this
+project genuinely lacks. Bias alone is the weakest case — it can be near
+zero under a pure phase shift — but the broader point is interpretability
+across all four existing metrics.
 
-Pending Jingyi's confirmation on #13 that "ILAMB metrics" in
-`communication-internal` meant goodness-of-fit generally rather than the
-package specifically.
+**Proposed direction: add the metrics, not the framework.** Fold
+ILAMB-style seasonal-cycle and interannual-variability scoring into
+`compute_fit` rather than adopting ILAMB itself. The reasoning is in #13,
+but briefly: ILAMB's value is comparability through its curated global
+reference datasets, and this project evaluates against NEON tower
+observations instead — so running its machinery over our own data
+forfeits most of the benefit that justifies the machinery.
+
+> **Not yet decided.** #13 is open and the choice is Jingyi's: whether
+> "ILAMB metrics" in `communication-internal` meant the package
+> specifically or goodness-of-fit generally. If it meant the package,
+> #18 becomes a stepping stone rather than the destination, and the
+> ~2-3 day ILAMB integration returns to scope. Nothing here should be
+> scheduled ahead of that answer.
 
 ### Scope gaps to reconcile
 

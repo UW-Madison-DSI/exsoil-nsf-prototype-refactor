@@ -176,10 +176,22 @@ ls ~/exsoil-baseline-konz/archive/lnd/hist/KONZ.transient.clm2.h1a.2018-07-01-*.
 ncdump -h <that file>
 ```
 
-In-container equivalent after a `run_neon_v2.py` run:
+In-container equivalent. Note these differ by wrapper — `run_neon_v2.py`
+inserts site and experiment segments, `run_tower` does not:
 
 ```
+# run_tower
 ls /home/user/archive/lnd/hist/{site}.transient.clm2.h1a.*.nc
+
+# run_neon_v2.py (what the Hubs drive); exp is "control" or e.g. "PRECTmms_1.2"
+ls {dirname(base_case_root)}/archive/{site}/{exp}/lnd/hist/{site}.transient.clm2.h1a.*.nc
+```
+
+Rather than choosing, use the reader, which probes both:
+
+```python
+from analytics_modules import find_ctsm_hist_files
+files = find_ctsm_hist_files("KONZ", 2018)
 ```
 
 ## 7. Sample `ncdump -h` excerpt (KONZ h1a, 2018-07-01)
@@ -209,15 +221,17 @@ The 5-site reference copies (Maria's S3/Drive set) are now staged locally at
 | Sites | ABBY, CLBJ, CPER, KONZ, TALL | any NEON site |
 | Streams | plain `h0` (monthly), `h1` (daily) | `h0a` / `h1a` (suffixed) |
 | Filename | `{site}.transient.clm2.h1.YYYY-MM-DD-00000.nc` | `...clm2.h1a.YYYY-MM-DD-01800.nc` |
-| Format | NetCDF-3 (64-bit offset), `engine="scipy"` | verify (may be NetCDF-4) |
+| Format | NetCDF-3 CDF-2, reads with `scipy` | **CDF-5** (`CDF\x05`), needs `netcdf4` |
 | Coverage | 2018-01-01 → 2022-04-01 (CPER → 2022-03) | 2018-01 → 2024-11 (KONZ) |
 | Grid / vars | levgrnd=25, levsoi=20, 48 steps/day; TSOI, H2OSOI, GPP | identical |
 | Contents | **model output only** | model output |
 
 **What matches:** grid, dimensions, the three Hub variables (TSOI/H2OSOI/GPP),
-and units are identical to live output. The reference naming (`h1`, NetCDF-3)
-is exactly what the *current* `data_access.py` expects — so reference reading
-works with the existing reader; only *live* reading needs the `h1`→`h1a` fix.
+and units are identical to live output. **What differs is naming and binary
+format**, and since Phase 1 the reader handles both without the caller
+choosing: the stream token is probed from disk and the engine is selected per
+file from its magic number. Reading a reference copy and reading live output
+are the same call.
 
 **Two caveats:**
 1. **Model output only — no observations.** These copies contain the
@@ -241,7 +255,7 @@ departures are what the code now depends on.
 | Handoff item | Outcome |
 |---|---|
 | Update the history filter in both files: `h1` → `h1a` | **Not a rename.** Both conventions must work simultaneously, so the token is probed rather than switched. A straight rename would have broken the S3 path and the reference copies. |
-| Read from `{output_root}/archive/lnd/hist/` | **Insufficient.** That is the `run_tower` layout; `run_neon_v2.py` inserts site and experiment segments. `find_ctsm_hist_files()` probes four layouts. See §1. |
+| Read from `{output_root}/archive/lnd/hist/` | **Insufficient.** That is the `run_tower` layout; `run_neon_v2.py` inserts site and experiment segments. `find_ctsm_hist_files()` probes all known layouts rather than assuming one. See §1. |
 | Verify the xarray engine (NetCDF-3 vs NetCDF-4) | **Neither.** Live output is CDF-5. `scipy` cannot read it and `h5netcdf` cannot either. The engine is chosen per file from its magic number. See §5. |
 
 A third file also carried the stale pattern and was named nowhere in the
