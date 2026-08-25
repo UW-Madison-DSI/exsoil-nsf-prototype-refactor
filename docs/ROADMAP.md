@@ -14,7 +14,7 @@ Execution for that phase is planned and tracked separately:
 - Execution tracker: GitHub epic **#11** (phase issues #5-#10, scope decisions #12-#14)
 - Shareable status: [docs/project-summary/hub-integration-progress-report.md](project-summary/hub-integration-progress-report.md)
 
-Last updated: 2026-07-30
+Last updated: 2026-08-25
 
 ---
 
@@ -151,19 +151,33 @@ transient run (83 monthly history files). NEON tower forcing data is
 available through December 2024 for KONZ (84 monthly files; use
 `STOP_N=83` — see the performance baseline for the boundary gotcha).
 
-**Infrastructure is done. The active work is hub integration**, and
-none of Phases 1-5 have started: `analytics_modules/data_access.py`
-still reads exclusively from S3.
+**Infrastructure is done. The active work is hub integration.** Phase 0
+and Phase 1 are complete; Phases 2-5 have not started. The analysis
+library now reads local output by default, but the Hub notebooks still
+contain their own S3 calls, which is Phase 2 onward.
 
-### Known blocker for Phase 1
+### Phase 1 outcome (resolved, July 2026)
 
-Live CTSM output uses new-style suffixed streams (`h0a` monthly, `h1a`
-daily) under `archive/lnd/hist/`, but both `analytics_modules/data_access.py`
-and `cesm-tools/site_and_regional/run_neon_v2.py` (~lines 263-264) still
-filter on the stale `archive_1/...clm2.h1.{year}` pattern, so they match
-**zero** live files. Phase 1 must fix the stream token *and* the date
-format in both files, not just the directory. Detail in the
-[data contract](data-contract.md).
+The blocker was that live CTSM output uses suffixed streams (`h0a`
+monthly, `h1a` daily) while the readers filtered on the stale
+`archive_1/...clm2.h1.{year}` pattern, matching **zero** live files.
+Resolved in `430d416` — but three of the plan's assumptions turned out
+to be wrong, and the fixes differ from what was written:
+
+| Plan said | Reality |
+|---|---|
+| Change `h1`→`h1a` in both files | Would have broken the S3 path. S3 and the reference copies legitimately use `h1`; both conventions must work at once, so the token is discovered by probing. |
+| Engine may be NetCDF-4; try `h5netcdf` | Live output is **CDF-5**. `scipy` cannot read it and `h5netcdf` cannot either. Engine is chosen from the file's magic number. |
+| Live path is `{output_root}/archive/lnd/hist/` | That is the `run_tower` layout. `run_neon_v2.py:1086-1089` uses `{dirname(base_case_root)}/archive/{site}/{control\|VAR_VALUE}/`. Data contract corrected in `ebf68fc`. |
+| Two files need the fix | Three. `analytics_modules/neon_notebook_wrapper.py:34` is named nowhere in the plan or issue. |
+
+Also fixed along the way: `plot_soil_profile_timeseries`'s local branch
+was dead code (`is_s3` derived from a literal, so always `True`), and
+`run_neon_v2.py` carried 238 lines of forked S3 helpers, three-quarters
+of them unreachable, removed in `621d329`.
+
+`CTSM_OUTPUT_ROOT` defaults to `/home/user`, documented in
+[getting-started](getting-started.md).
 
 ---
 
@@ -220,7 +234,8 @@ runs. The NEON tower data is trivial.
 | ~~Publish to GHCR~~ | ~~Medium~~ | Done. `v2.0.0-rc4` with both architectures. |
 | ~~Review use cases with Jingyi~~ | ~~High~~ | Done. Settled in the July 9 `communication-internal` thread: native/live data, GPP as the Kalman target, 5 sites, 4-step Hub 3 loop. |
 | ~~Full-duration simulation~~ | ~~Medium~~ | Done. Full 2018-2024 KONZ run, 83 monthly files. |
-| **Phase 1: rebind data-access layer** | High | Issue #6. Local reader + source-agnostic `open_ctsm_hist()`; fix the `h1`→`h1a` naming. Not blocked by the pending decisions. ~1 day. |
+| ~~Phase 1: rebind data-access layer~~ | ~~High~~ | Done (#6, `430d416`). `open_ctsm_hist()` / `find_ctsm_hist_files()` read local output with no credentials; 15 tests pass against real KONZ and reference data. |
+| **Phase 2: Hub 1 on live output** | High | Issue #7. Repoint `Data_Hub.ipynb` at `open_ctsm_hist()` and drop its eager credential cell. Note `/opt/analytics_modules` shadows the repo on `sys.path`. ~0.5 day. |
 | **Get scope decisions to Jingyi** | High | Issues #12-#14 plus perturbation scope and validation tolerance. #12 blocks Phase 3. |
 | **PR and merge** | Medium | Open PR from `feature/arm64-multiarch-rebuild` to `dev`. 63 commits ahead of `main`, no PR open. |
 | **File ESCOMP GitHub issue** | Low | Report the mpi-serial conflict and data server gap. Draft at `docs/ctsm-issue-draft.md`. |
