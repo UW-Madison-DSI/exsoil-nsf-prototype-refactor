@@ -34,6 +34,16 @@ from .data_access import (
     open_ctsm_hist_from_s3,
 )
 
+# Observed tower fluxes -- the counterpart to data_access, which reads model
+# output. Hub 2 evaluates one against the other.
+from .observations import (
+    download_eval_files,
+    monthly_observed_gpp,
+    observed_gpp_coverage,
+    eval_months,
+    UMOL_CO2_TO_GC,
+)
+
 # Plotting, moved out of data_access into visualization.py. Re-exported so
 # `from analytics_modules import plot_soil_profile_timeseries` keeps working.
 #
