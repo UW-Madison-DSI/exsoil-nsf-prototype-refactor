@@ -40,8 +40,13 @@ Layout
 - Choosing a source: resolve_source, open_ctsm_hist -- the entry point most
   callers want. Local by default so a fresh container works with no
   credentials; S3 is opt-in via CTSM_DATA_SOURCE or an explicit argument.
-Plotting lives in the sibling `visualization` module, so importing this one
-does not pull in matplotlib.
+
+Plotting lives in the sibling `visualization` module. This module no longer
+imports matplotlib itself, but note that importing the *package* still does:
+`__init__` loads `neon_eval_utils` and `visualization` eagerly, and both pull
+matplotlib. Deferring that is tracked separately. The two plotting names that
+used to live here are still importable from this module for compatibility --
+see the end of the file.
 
 Environment
 -----------
@@ -580,3 +585,28 @@ def download_keys(bucket: str, keys: Iterable[str], local_root: str, s3, strip_p
         s3.download_file(bucket, key, str(dest))
         n += 1
     print(f"Downloaded {n} files into {local_root}")
+
+
+# ============================================================
+# 8. Backwards compatibility
+# ============================================================
+
+# plot_soil_profile_timeseries and truncate_colormap lived in this module
+# until they moved to visualization.py. Both were documented and public, so
+# the old import path keeps working rather than breaking callers:
+#
+#     from analytics_modules.data_access import plot_soil_profile_timeseries
+#
+# Resolved on attribute access (PEP 562) rather than by importing
+# visualization at module load, so this module still does not pull matplotlib
+# in on its own.
+_MOVED_TO_VISUALIZATION = frozenset(
+    {"plot_soil_profile_timeseries", "truncate_colormap"}
+)
+
+
+def __getattr__(name: str):
+    if name in _MOVED_TO_VISUALIZATION:
+        from . import visualization
+        return getattr(visualization, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
