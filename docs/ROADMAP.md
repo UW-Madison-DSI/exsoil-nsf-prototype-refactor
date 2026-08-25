@@ -250,7 +250,9 @@ epic #11. Summarized here:
 |------|----------|-------------|
 | ~~End-to-end NEON simulation test~~ | ~~High~~ | Done. Full KONZ transient produces valid CLM output. |
 | ~~Observation source discovery~~ | ~~Medium~~ | Done (#12). NCAR/NEON eval files, public and credential-free, 45 monthly files per site covering 2018-01 → 2021-09 for all 5 sites, carrying observed GPP. Ingestion spec (units, cadence, quality flags) written. |
-| **NEON observation pipeline** | High | Issue #12, still open. Implement the fetch/read helper replacing the unwritten `download_eval_files`, and **settle the negative-GPP filtering policy with Jingyi** — observed GPP goes negative from flux partitioning, and unfiltered values make the misfit numbers meaningless. |
+| ~~Observed-GPP comparison policy~~ | ~~High~~ | Decided (#12). **Compare at monthly resolution.** Negatives are a flux-partitioning artifact affecting 26-36% of half-hourly values; monthly aggregation reduces that to 8%, all dormant-season and within ±0.1 umol/m2/s of zero. See [decision 005](decisions/005-observed-gpp-comparison/). |
+| **NEON observation pipeline** | High | Issue #12. Implement the fetch/read helper replacing the unwritten `download_eval_files`, applying the monthly-comparison decision and the ×12.011e-6 unit conversion. |
+| **Rescope Phase 3/5 site coverage** | High | **41 of 225 site-months have no GPP at all** (18%). Only KONZ is complete (45/45); ABBY is 28/45. The five-site scope needs revisiting against real coverage. See [decision 005](decisions/005-observed-gpp-comparison/). |
 | **Phase 2: Hub 1 (Data Analysis)** | High | Issue #7. Simplest Hub first, per Maria's recommendation. ~0.5 day. |
 | **Phase 3: Hub 2 (Modeling / Kalman)** | High | Issue #8. Unblocked on data; still needs the negative-GPP filtering policy (#12). ~1 day. |
 | **Extend the fit metrics** | Medium | Add seasonal-cycle and interannual-variability scoring to `compute_fit`, the genuine gap versus ILAMB. See [Goodness-of-fit evaluation](#goodness-of-fit-evaluation) below. |
@@ -311,6 +313,7 @@ stand-ins in the code. Flagged so they are not later read as delivered:
 | Item | Description |
 |------|-------------|
 | **Revisit ILAMB integration** | Deferred, not rejected — see the trigger conditions below. |
+| **Sub-monthly GPP comparison** | Deferred with the monthly decision (#12). Revisit when a question needs diurnal or event-scale behaviour, when Kalman calibration needs a faster cadence, or when a defensible sub-monthly treatment of the partitioning negatives exists. |
 | **CESM 3.x evaluation** | When CESM 3.x ships (est. late 2026), evaluate whether to maintain a separate coupled-model container. |
 | **Pre-built case images** | Explore shipping a container with a pre-compiled CLM binary for common compsets. |
 | **Multi-site batch runs** | Support running all 48 NEON sites in batch for systematic model evaluation. |
