@@ -532,9 +532,20 @@ def open_ctsm_hist(
     source="s3" (or set CTSM_DATA_SOURCE=s3) for the original fixtures. S3
     credentials are only required on the S3 path.
     """
+    if stream not in STREAM_TOKENS:
+        raise ValueError(f"stream must be one of {sorted(STREAM_TOKENS)}, got {stream!r}")
+
     if resolve_source(source) == "s3":
+        # The S3 copies predate the CTSM 5.4 rename, so the public stream name
+        # maps to the legacy token -- otherwise stream="monthly" would silently
+        # read daily files. An explicit stream_token still wins.
+        kwargs.setdefault("stream_token", STREAM_TOKENS[stream][-1])
+        # The S3 reader interpolates year straight into the key prefix, so
+        # year=None has to become an empty string (match every year) rather
+        # than the string "None", which matches nothing.
         return open_ctsm_hist_from_s3(
-            input_label, get_s3_client(), bucket_name, neon_site, str(year), **kwargs
+            input_label, get_s3_client(), bucket_name, neon_site,
+            "" if year is None else str(year), **kwargs
         )
     return open_ctsm_hist_local(
         neon_site, year, output_root=output_root, stream=stream,

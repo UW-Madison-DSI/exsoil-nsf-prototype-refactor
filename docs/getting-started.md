@@ -16,7 +16,7 @@ experiments, running simulations, and interpreting results.
 
 ![Version Lineage](ctsm-architecture-guide/lineage-chart.png)
 
-The container is built on CTSM 5.4.002. For a detailed guide to how
+The container is built on CTSM 5.4.043. For a detailed guide to how
 all the components fit together, see the
 [architecture guide](ctsm-architecture-guide/ctsm-architecture-guide.html).
 
@@ -24,7 +24,7 @@ all the components fit together, see the
 
 ### CTSM 5.4 with NEON usermods
 
-The container includes CTSM at tag `ctsm5.4.002` with site-specific
+The container includes CTSM at tag `ctsm5.4.043` with site-specific
 usermods for 48 NEON tower locations. Each usermods directory contains
 the grid cell, surface datasets, and namelist overrides needed to run
 CLM at that site. You can create a point simulation at Konza Prairie or
@@ -67,7 +67,7 @@ you pull the image.
 ### 1. Launch the container
 
 ```bash
-docker run --rm -p 8888:8888 exsoil-arm64-test
+docker run --rm -p 8888:8888 ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
 ```
 
 Copy the URL from the terminal output and open it in your browser. You
@@ -134,7 +134,7 @@ CTSM_DATA_SOURCE=s3
 ```
 
 ```bash
-docker run --rm -p 8888:8888 --env-file .env exsoil-arm64-test
+docker run --rm -p 8888:8888 --env-file .env ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
 ```
 
 Credentials are read only on the S3 path, so leaving them unset costs you
@@ -153,7 +153,7 @@ notebooks persist:
 ```bash
 docker run --rm -p 8888:8888 \
   -v $(pwd)/my-work:/home/user/my-work \
-  exsoil-arm64-test
+  ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
 ```
 
 Anything saved under `my-work/` inside JupyterLab appears in `my-work/` on
@@ -167,7 +167,7 @@ and set `CTSM_OUTPUT_ROOT` to match:
 docker run --rm -p 8888:8888 \
   -v $(pwd)/runs:/home/user/runs \
   -e CTSM_OUTPUT_ROOT=/home/user/runs \
-  exsoil-arm64-test
+  ghcr.io/uw-madison-dsi/exsoil-nsf-prototype-refactor:latest
 ```
 
 ## Typical workflow

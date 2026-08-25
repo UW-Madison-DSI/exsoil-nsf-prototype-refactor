@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from analytics_modules import data_access
 from analytics_modules.data_access import (
     STREAM_TOKENS,
     _engine_for_local,
@@ -68,6 +69,58 @@ class TestSourceResolution:
 
 
 @pytest.mark.tier0
+class TestS3Dispatch:
+    """What open_ctsm_hist forwards to the S3 reader.
+
+    These need no credentials and no network: the reader is replaced with a
+    recorder. Both bugs guarded here shipped in Phase 1 precisely because the
+    rest of the suite only exercises the local branch.
+    """
+
+    @pytest.fixture
+    def forwarded(self, monkeypatch):
+        captured = {}
+
+        def fake_reader(input_label, s3_client, bucket_name, neon_site, year, **kwargs):
+            captured.update(year=year, neon_site=neon_site,
+                            input_label=input_label, **kwargs)
+            return "dataset"
+
+        monkeypatch.setattr(data_access, "open_ctsm_hist_from_s3", fake_reader)
+        monkeypatch.setattr(data_access, "get_s3_client", lambda *a, **k: None)
+        return captured
+
+    def test_year_none_becomes_empty_prefix(self, forwarded):
+        """year=None must match every year, not the literal string 'None'."""
+        open_ctsm_hist("KONZ", None, source="s3")
+        assert forwarded["year"] == "", (
+            "year=None must forward an empty prefix; "
+            f"got {forwarded['year']!r}, which matches no key"
+        )
+
+    def test_year_is_stringified(self, forwarded):
+        open_ctsm_hist("KONZ", 2018, source="s3")
+        assert forwarded["year"] == "2018"
+
+    def test_stream_maps_to_legacy_token(self, forwarded):
+        """S3 holds pre-5.4 output, so 'monthly' must reach it as h0, not h1."""
+        open_ctsm_hist("KONZ", 2018, source="s3", stream="monthly")
+        assert forwarded["stream_token"] == "h0"
+
+    def test_daily_maps_to_legacy_token(self, forwarded):
+        open_ctsm_hist("KONZ", 2018, source="s3", stream="daily")
+        assert forwarded["stream_token"] == "h1"
+
+    def test_explicit_stream_token_wins(self, forwarded):
+        open_ctsm_hist("KONZ", 2018, source="s3", stream="daily", stream_token="h1a")
+        assert forwarded["stream_token"] == "h1a"
+
+    def test_unknown_stream_rejected_on_s3_path(self, forwarded):
+        with pytest.raises(ValueError, match="daily"):
+            open_ctsm_hist("KONZ", 2018, source="s3", stream="hourly")
+
+
+@pytest.mark.tier0
 class TestFileDiscovery:
     def test_rejects_unknown_stream(self):
         with pytest.raises(ValueError, match="daily"):
@@ -107,7 +160,10 @@ class TestLiveOutput:
     def test_opens_non_empty_dataset(self):
         dataset = open_ctsm_hist("KONZ", 2018, output_root=LIVE_ROOT)
         assert dataset.sizes.get("time", 0) > 0
-        assert {"TSOI", "H2OSOI", "GPP"} & set(dataset.variables)
+        # Subset, not intersection: the data contract promises all three, and
+        # an intersection check passes when two of them have gone missing.
+        missing = {"TSOI", "H2OSOI", "GPP"} - set(dataset.variables)
+        assert not missing, f"missing contract variables: {sorted(missing)}"
 
 
 @pytest.mark.tier0
