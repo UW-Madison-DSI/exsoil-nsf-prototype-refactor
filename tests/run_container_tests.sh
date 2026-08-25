@@ -20,6 +20,13 @@ EXTRA_ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --image)
+            # Guard before reading $2: set -u would otherwise abort on an
+            # unbound variable rather than explaining what went wrong.
+            if [[ $# -lt 2 || "$2" == -* ]]; then
+                echo "Error: --image requires an image name" >&2
+                echo "Usage: $0 [--image IMAGE] [tier0|tier1|tier2] ..." >&2
+                exit 2
+            fi
             IMAGE="$2"
             shift 2
             ;;

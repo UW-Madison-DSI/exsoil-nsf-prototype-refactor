@@ -96,15 +96,20 @@ A completed KONZ run produced these streams (counts for the full 2018-01 →
 - `h1a` daily files carry **48 half-hourly timesteps** (`time = 48`). `h0a`
   monthly files carry **1 timestep** (the monthly mean).
 
-> ### ⚠️ Naming discrepancy — critical for Phase 1
-> The current readers filter on the **stale plain-`h1`** convention and will
-> match **zero** live files:
-> - `analytics_modules/data_access.py` builds `{site}.transient.clm2.h1.{year}`
-> - `cesm-tools/site_and_regional/run_neon_v2.py:263-264` builds the same
+> ### Naming discrepancy — resolved in Phase 1
+> **Historical, kept because the reasoning still governs the code.** The
+> readers used to filter on the plain-`h1` convention and matched **zero**
+> live files; live output is `.clm2.h1a.` / `.clm2.h0a.`.
 >
-> Live files are `.clm2.h1a.` / `.clm2.h0a.`. Phase 1 must update the stream
-> token (`h1` → `h1a`, add `h0a`) **and** the daily date format (`{year}` →
-> `{year}-MM-DD-SSSSS`) in **both** files, not just repoint the directory.
+> The fix was *not* a rename. The S3 fixtures and the reference copies
+> legitimately use `h1`/`h0` and must stay readable for Phase 5 validation,
+> so both conventions have to work at once — this is not a migration that
+> finishes. `analytics_modules.find_ctsm_hist_files()` therefore resolves
+> the token by probing what is on disk, newest naming first
+> (`STREAM_TOKENS`), rather than switching to the new one.
+>
+> Anyone "simplifying" that probe back to a single token will silently break
+> reading of the validation oracle.
 
 ## 3. Grid dimensions (single-point NEON case)
 
@@ -171,10 +176,22 @@ ls ~/exsoil-baseline-konz/archive/lnd/hist/KONZ.transient.clm2.h1a.2018-07-01-*.
 ncdump -h <that file>
 ```
 
-In-container equivalent after a `run_neon_v2.py` run:
+In-container equivalent. Note these differ by wrapper — `run_neon_v2.py`
+inserts site and experiment segments, `run_tower` does not:
 
 ```
+# run_tower
 ls /home/user/archive/lnd/hist/{site}.transient.clm2.h1a.*.nc
+
+# run_neon_v2.py (what the Hubs drive); exp is "control" or e.g. "PRECTmms_1.2"
+ls {dirname(base_case_root)}/archive/{site}/{exp}/lnd/hist/{site}.transient.clm2.h1a.*.nc
+```
+
+Rather than choosing, use the reader, which probes both:
+
+```python
+from analytics_modules import find_ctsm_hist_files
+files = find_ctsm_hist_files("KONZ", 2018)
 ```
 
 ## 7. Sample `ncdump -h` excerpt (KONZ h1a, 2018-07-01)
@@ -204,15 +221,17 @@ The 5-site reference copies (Maria's S3/Drive set) are now staged locally at
 | Sites | ABBY, CLBJ, CPER, KONZ, TALL | any NEON site |
 | Streams | plain `h0` (monthly), `h1` (daily) | `h0a` / `h1a` (suffixed) |
 | Filename | `{site}.transient.clm2.h1.YYYY-MM-DD-00000.nc` | `...clm2.h1a.YYYY-MM-DD-01800.nc` |
-| Format | NetCDF-3 (64-bit offset), `engine="scipy"` | verify (may be NetCDF-4) |
+| Format | NetCDF-3 CDF-2, reads with `scipy` | **CDF-5** (`CDF\x05`), needs `netcdf4` |
 | Coverage | 2018-01-01 → 2022-04-01 (CPER → 2022-03) | 2018-01 → 2024-11 (KONZ) |
 | Grid / vars | levgrnd=25, levsoi=20, 48 steps/day; TSOI, H2OSOI, GPP | identical |
 | Contents | **model output only** | model output |
 
 **What matches:** grid, dimensions, the three Hub variables (TSOI/H2OSOI/GPP),
-and units are identical to live output. The reference naming (`h1`, NetCDF-3)
-is exactly what the *current* `data_access.py` expects — so reference reading
-works with the existing reader; only *live* reading needs the `h1`→`h1a` fix.
+and units are identical to live output. **What differs is naming and binary
+format**, and since Phase 1 the reader handles both without the caller
+choosing: the stream token is probed from disk and the engine is selected per
+file from its magic number. Reading a reference copy and reading live output
+are the same call.
 
 **Two caveats:**
 1. **Model output only — no observations.** These copies contain the
@@ -227,11 +246,21 @@ works with the existing reader; only *live* reading needs the `h1`→`h1a` fix.
    truth. Confirm the generating version with Maria before setting a
    validation tolerance.
 
-## Handoff to Phase 1 (issue #6)
+## Phase 1 outcome (issue #6, closed)
 
-1. Update the history filter in **both** `data_access.py` and
-   `run_neon_v2.py`: stream `h1` → `h1a` (and add `h0a` for monthly), date
-   token `{year}` → the daily `YYYY-MM-DD-SSSSS` form.
-2. Read from `{output_root}/archive/lnd/hist/`; handle the missing per-site
-   subdirectory relative to the old S3 `archive_1/{site}.transient/` layout.
-3. Verify the xarray engine for live files (NetCDF-3 `scipy` vs NetCDF-4).
+The three handoff items this section originally listed are done, and two of
+the three turned out differently than written. Recorded because the
+departures are what the code now depends on.
+
+| Handoff item | Outcome |
+|---|---|
+| Update the history filter in both files: `h1` → `h1a` | **Not a rename.** Both conventions must work simultaneously, so the token is probed rather than switched. A straight rename would have broken the S3 path and the reference copies. |
+| Read from `{output_root}/archive/lnd/hist/` | **Insufficient.** That is the `run_tower` layout; `run_neon_v2.py` inserts site and experiment segments. `find_ctsm_hist_files()` probes all known layouts rather than assuming one. See §1. |
+| Verify the xarray engine (NetCDF-3 vs NetCDF-4) | **Neither.** Live output is CDF-5. `scipy` cannot read it and `h5netcdf` cannot either. The engine is chosen per file from its magic number. See §5. |
+
+A third file also carried the stale pattern and was named nowhere in the
+plan or the issue: `analytics_modules/neon_notebook_wrapper.py:34`.
+
+Entry points: `open_ctsm_hist()`, `open_ctsm_hist_local()`, and
+`find_ctsm_hist_files()`, local by default via `CTSM_DATA_SOURCE` and
+`CTSM_OUTPUT_ROOT`. Covered by `tests/test_data_access_local.py`.
