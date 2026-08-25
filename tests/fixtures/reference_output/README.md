@@ -45,15 +45,28 @@ NetCDF-3 (`engine="scipy"`), plain `h0`/`h1` naming.
    plausible-range oracle, not exact ground truth. Confirm the version with
    Maria before fixing a validation tolerance.
 
-## Reading them (Phase 1)
+## Reading them
 
-Because the copies use the old plain-`h1` naming, the **current**
-`data_access.py` reader matches them with only a path change (S3 →
-`reference-output/{site}.transient/lnd/hist/`). The `h1`→`h1a` fix is needed
-only for reading *live* container output. See `docs/data-contract.md` §8.
+Nothing special is required — the reader handles these and live output alike:
+
+```python
+from analytics_modules import open_ctsm_hist, find_ctsm_hist_files
+
+ds = open_ctsm_hist("CLBJ", 2019, output_root="/path/to/repo")
+```
+
+`find_ctsm_hist_files()` probes the known archive layouts and resolves the
+stream token from what is on disk, so the copies' legacy `h1`/`h0` naming and
+the container's `h1a`/`h0a` both work. The engine is picked per file from its
+magic number, which matters here: these copies are NetCDF-3 (CDF-2) while live
+output is CDF-5.
+
+Both conventions are supported permanently, not transitionally — Phase 5
+compares live output *against* these copies, so both must stay readable.
 
 ## Local live sample (KONZ)
 
-A completed KONZ run (new `h1a` naming) also exists at
-`~/exsoil-baseline-konz/archive/lnd/hist/` — use it as the *live-output* sample
-while wiring Phase 1, alongside these reference copies.
+A completed KONZ run (current `h1a` naming, CDF-5) exists at
+`~/exsoil-baseline-konz/archive/lnd/hist/` — the live-output counterpart to
+these copies, and what `tests/test_data_access_local.py` reads when
+`CTSM_TEST_LIVE_ROOT` points at it.
