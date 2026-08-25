@@ -242,8 +242,6 @@ runs. The NEON tower data is trivial.
 
 ### Medium-term
 
-| Item | Priority | Description |
-|------|----------|-------------|
 Hub work is tracked in detail by the
 [implementation plan](hub-integration-plan/hub-integration-plan.md) and
 epic #11. Summarized here:
@@ -251,12 +249,37 @@ epic #11. Summarized here:
 | Item | Priority | Description |
 |------|----------|-------------|
 | ~~End-to-end NEON simulation test~~ | ~~High~~ | Done. Full KONZ transient produces valid CLM output. |
+| ~~NEON observation pipeline~~ | ~~Medium~~ | Source identified (#12). NCAR/NEON eval files, public and credential-free, 45 monthly files per site covering 2018-01 → 2021-09 for all 5 sites, carrying observed GPP. |
 | **Phase 2: Hub 1 (Data Analysis)** | High | Issue #7. Simplest Hub first, per Maria's recommendation. ~0.5 day. |
-| **Phase 3: Hub 2 (Modeling / Kalman)** | High | Issue #8. Blocked on an observed-GPP source (#12). ~1 day. |
+| **Phase 3: Hub 2 (Modeling / Kalman)** | High | Issue #8. Unblocked on data; still needs the negative-GPP filtering policy (#12). ~1 day. |
+| **Extend the fit metrics** | Medium | Add seasonal-cycle and interannual-variability scoring to `compute_fit`, the genuine gap versus ILAMB. See [Goodness-of-fit evaluation](#goodness-of-fit-evaluation) below. |
 | **Phase 4: Hub 3 (Experimentation)** | Medium | Issue #9. Precip perturbation → two runs → t-test. ~1.5 days. |
-| **Phase 5: multi-site validation** | Medium | Issue #10. All 3 Hubs × 5 sites from a fresh pull. ~1 day. |
-| **NEON observation pipeline** | Medium | Issue #12. Source observed GPP: NEON API, `evaluation_files`, or NCAR eval files. |
+| **Phase 5: multi-site validation** | Medium | Issue #10. All 3 Hubs × 5 sites from a fresh pull. Scope to the 2018-01 → 2021-09 observation window. ~1 day. |
 | **Image size optimization** | Low | Investigate `--filter=blob:none` clone, BuildKit cache mounts. |
+
+### Goodness-of-fit evaluation
+
+Hub 2 currently computes **R², RMSE, MAE, and bias** (`neon_eval_utils.compute_fit`),
+plus bias and RMSE ratios against observed standard deviation in
+`residuals_plots`. That covers *magnitude* agreement.
+
+**The gap is timing.** A model can carry almost no average bias while
+peaking in the wrong season, and bias alone scores that as a success.
+For a 45-month GPP series this matters. ILAMB solves it by scoring
+seasonal cycle and interannual variability separately from bias, and
+those two metrics are the part of ILAMB this project actually lacks.
+
+**Direction: add the metrics, not the framework.** Fold ILAMB-style
+seasonal-cycle and interannual-variability scoring into `compute_fit`
+rather than adopting ILAMB itself. The reasoning is in #13, but briefly:
+ILAMB's value is comparability through its curated global reference
+datasets, and this project evaluates against NEON tower observations
+instead — so running its machinery over our own data forfeits most of
+the benefit that justifies the machinery.
+
+Pending Jingyi's confirmation on #13 that "ILAMB metrics" in
+`communication-internal` meant goodness-of-fit generally rather than the
+package specifically.
 
 ### Scope gaps to reconcile
 
@@ -265,7 +288,7 @@ stand-ins in the code. Flagged so they are not later read as delivered:
 
 | Feature | Doc says | Actual | Issue |
 |---------|----------|--------|-------|
-| ILAMB benchmarking | Done | Custom fit metrics (bias, R², residuals) | #13 |
+| ILAMB benchmarking | Done | Custom fit metrics (bias, R², residuals). Direction: extend the metrics, revisit ILAMB later — see above and Long-term. | #13 |
 | 5-step EnKF loop | Done | Simple/scalar Kalman filter, no ensemble | #14 |
 | PFT / soil / temperature perturbation | Listed | Only precipitation is codified | #3 |
 
@@ -273,6 +296,45 @@ stand-ins in the code. Flagged so they are not later read as delivered:
 
 | Item | Description |
 |------|-------------|
+| **Revisit ILAMB integration** | Deferred, not rejected — see the trigger conditions below. |
 | **CESM 3.x evaluation** | When CESM 3.x ships (est. late 2026), evaluate whether to maintain a separate coupled-model container. |
 | **Pre-built case images** | Explore shipping a container with a pre-compiled CLM binary for common compsets. |
 | **Multi-site batch runs** | Support running all 48 NEON sites in batch for systematic model evaluation. |
+
+#### Revisiting ILAMB
+
+Deferred rather than rejected. Recorded here so the decision can be
+re-opened on evidence rather than re-litigated from scratch.
+
+**What was verified (2026-08-25, in the container image):** `ilamb 2.7.3`
+installs cleanly from conda-forge with a `py313` build matching the
+image — **14 packages, 15 MB**, a one-line `environment.yml` change. It
+will *not* pip-install, because `cf-units` needs `UDUNITS2_XML_PATH`;
+conda-forge supplies it. Site (non-gridded) data is supported: `ndata`,
+ILAMB's unstructured site dimension, appears 65 times in
+`ILAMB.Variable`, so single-point NEON towers are not a mismatch. It
+ships `ilamb-run`, `ilamb-fetch`, `ilamb-mean`, `ilamb-setup` and 16
+confrontation modules, scoring Bias, RMSE, Seasonal Cycle, Spatial
+Distribution, and Interannual Variability.
+
+**Why we deferred:** ILAMB's advantage is comparability with other
+land-model evaluations through its curated global reference datasets
+(fetched via `ilamb-fetch`). This project evaluates against NEON tower
+observations, which ILAMB does not ship — so we would be using it as a
+scoring library over our own data and forfeiting the comparability that
+justifies it. Its workflow is also config-file plus CLI producing an
+HTML dashboard, where the Hubs are notebooks.
+
+**Revisit if any of these become true:**
+
+- The grant, a reviewer, or a collaborator expects **ILAMB-comparable
+  scores** specifically, rather than goodness-of-fit generally.
+- The project starts evaluating against **gridded or global reference
+  data**, where ILAMB's curated collection becomes the point.
+- **Multi-site batch runs** (above) land, making a standardized scored
+  dashboard across 48 sites more valuable than bespoke notebook output.
+- The extended `compute_fit` metrics prove insufficient in practice.
+
+**Estimated cost if adopted:** ~2-3 days, net-new work absent from
+Phases 0-5 — wiring NEON observations into ILAMB's site path and
+surfacing its scores in the notebook.
