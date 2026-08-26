@@ -170,6 +170,12 @@ def monthly_observed_gpp(
                                 these are reported, not clamped
     """
     months = list(months) if months is not None else eval_months()
+    if not months:
+        raise ValueError(
+            "months is empty. Pass None for the full published window "
+            f"({EVAL_FIRST_MONTH}..{EVAL_LAST_MONTH}), or at least one "
+            "'YYYY-MM' string."
+        )
     root = (Path(cache_dir) if cache_dir else eval_cache_dir()) / site
 
     if download:
