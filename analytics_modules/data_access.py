@@ -482,6 +482,11 @@ def open_ctsm_hist_local(
         preprocess = _select
 
     start = time.time()
+    # This emits a FutureWarning about the `data_vars` default. Do not silence
+    # it by pinning the concat kwargs: `data_vars="minimal"` alone is safe, but
+    # adding `compat="override"` and `coords="minimal"` -- which xarray then
+    # demands in turn -- reads without error and leaves 82 of 83 months as NaN.
+    # Correct shape, correct time axis, no exception, no data. See issue #28.
     ds_ctsm = xr.open_mfdataset(
         sim_files,
         engine=_engine_for_local(sim_files[0]),
