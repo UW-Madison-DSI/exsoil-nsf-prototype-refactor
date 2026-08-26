@@ -182,3 +182,76 @@ class TestLegacyReferenceCopies:
     def test_opens_non_empty_dataset(self):
         dataset = open_ctsm_hist("CLBJ", 2019, output_root=REFERENCE_ROOT)
         assert dataset.sizes.get("time", 0) > 0
+
+
+def write_history_file(directory, site, stamp, variables, stream="h1a", day_index=0):
+    """Write a minimal CTSM-shaped history file.
+
+    Enough structure to exercise discovery and variable selection without a
+    completed simulation: a time axis, the bookkeeping variables CTSM emits
+    alongside it, and whatever data variables the test asks for.
+    """
+    import numpy as np
+    import xarray as xr
+
+    n = 4
+    # Distinct time values per file, or combine="by_coords" cannot order them.
+    # Real CTSM files differ this way naturally; synthetic ones must be made to.
+    offset = float(day_index * n)
+    times = offset + np.arange(n, dtype=float)
+    data = {name: (("time",), np.arange(n, dtype=float)) for name in variables}
+    data["mcdate"] = (("time",), np.full(n, 20180101 + day_index, dtype=int))
+    data["mcsec"] = (("time",), np.arange(n, dtype=int) * 1800)
+    dataset = xr.Dataset(data, coords={"time": times})
+    dataset.time.attrs["units"] = "days since 2018-01-01 00:00:00"
+
+    target = Path(directory) / "archive" / "lnd" / "hist"
+    target.mkdir(parents=True, exist_ok=True)
+    path = target / f"{site}.transient.clm2.{stream}.{stamp}.nc"
+    dataset.to_netcdf(path)
+    return path
+
+
+@pytest.mark.tier0
+class TestVariableSelection:
+    """Selecting variables at open time, without needing a real run.
+
+    The monthly stream carries 623 variables per file; reading all of them
+    takes ~117 s where selecting three takes ~10 s. The risk in that
+    optimisation is silently losing the time axis, so that is what these pin.
+    """
+
+    @pytest.fixture
+    def synthetic_run(self, tmp_path):
+        stamps = ("2018-01-01-01800", "2018-01-02-01800")
+        for day_index, stamp in enumerate(stamps):
+            write_history_file(tmp_path, "KONZ", stamp, ["GPP", "TSOI", "FSH"],
+                               day_index=day_index)
+        return tmp_path
+
+    def test_selection_keeps_only_requested_variables(self, synthetic_run):
+        dataset = open_ctsm_hist(
+            "KONZ", output_root=synthetic_run, variables=["GPP"]
+        )
+        assert "GPP" in dataset.data_vars
+        assert "TSOI" not in dataset.data_vars
+        assert "FSH" not in dataset.data_vars
+
+    def test_selection_retains_the_time_axis(self, synthetic_run):
+        """Losing time to a variable filter is never what the caller meant."""
+        dataset = open_ctsm_hist(
+            "KONZ", output_root=synthetic_run, variables=["GPP"]
+        )
+        assert dataset.sizes["time"] > 0
+        assert {"mcdate", "mcsec"} <= set(dataset.variables)
+
+    def test_no_selection_returns_everything(self, synthetic_run):
+        dataset = open_ctsm_hist("KONZ", output_root=synthetic_run)
+        assert {"GPP", "TSOI", "FSH"} <= set(dataset.data_vars)
+
+    def test_unknown_requested_variable_is_ignored(self, synthetic_run):
+        """A typo should not empty the dataset silently."""
+        dataset = open_ctsm_hist(
+            "KONZ", output_root=synthetic_run, variables=["GPP", "NOT_A_VAR"]
+        )
+        assert "GPP" in dataset.data_vars

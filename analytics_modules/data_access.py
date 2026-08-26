@@ -316,6 +316,10 @@ def open_ctsm_hist_from_s3(
 # oracle -- uses unsuffixed h0/h1. Both have to stay readable, so the token is
 # discovered from what is actually on disk rather than assumed. Newest naming
 # is tried first so a directory holding both resolves to the current run.
+# Kept regardless of a `variables` selection: dropping the time axis to a
+# variable filter is never what the caller meant.
+TIME_BOOKKEEPING = frozenset({"time", "time_bounds", "mcdate", "mcsec"})
+
 STREAM_TOKENS = {
     "daily": ("h1a", "h1"),
     "monthly": ("h0a", "h0"),
@@ -428,6 +432,7 @@ def open_ctsm_hist_local(
     output_root=None,
     stream: str = "daily",
     input_label: str = "transient",
+    variables=None,
     drop_variables=None,
     decode_times: bool = True,
     combine: str = "by_coords",
@@ -447,6 +452,12 @@ def open_ctsm_hist_local(
         output_root: Search root. Defaults to CTSM_OUTPUT_ROOT.
         stream: "daily" (h1a/h1) or "monthly" (h0a/h0).
         input_label: Case label, normally "transient".
+        variables: Keep only these, discarding the rest as each file opens.
+            Worth using on the monthly stream, which carries 623 variables per
+            file: selecting three takes ~10 s where reading everything takes
+            ~117 s. Time bookkeeping (time, time_bounds, mcdate, mcsec) is
+            always retained, since losing the time axis to a variable
+            selection is never what the caller meant.
         drop_variables: Passed to xarray. Useful for skipping the large
             static soil-property fields repeated in every file.
 
@@ -461,10 +472,20 @@ def open_ctsm_hist_local(
     )
     print(f"All Simulation files: [{len(sim_files)} files]")
 
+    preprocess = None
+    if variables is not None:
+        wanted = set(variables) | TIME_BOOKKEEPING
+
+        def _select(dataset):
+            return dataset[[v for v in dataset.data_vars if v in wanted]]
+
+        preprocess = _select
+
     start = time.time()
     ds_ctsm = xr.open_mfdataset(
         sim_files,
         engine=_engine_for_local(sim_files[0]),
+        preprocess=preprocess,
         drop_variables=drop_variables,
         decode_times=decode_times,
         combine=combine,
