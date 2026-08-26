@@ -14,7 +14,7 @@ Execution for that phase is planned and tracked separately:
 - Execution tracker: GitHub epic **#11** (phase issues #5-#10, scope decisions #12-#14)
 - Shareable status: [docs/project-summary/hub-integration-progress-report.md](project-summary/hub-integration-progress-report.md)
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
 ---
 
@@ -254,10 +254,10 @@ epic #11. Summarized here:
 | **NEON observation pipeline** | High | Issue #12. Implement the fetch/read helper replacing the unwritten `download_eval_files`, applying the monthly-comparison decision and the ×12.011e-6 unit conversion. |
 | **Rescope Phase 3/5 site coverage** | High | **41 of 225 site-months have no GPP at all** (18%). Only KONZ is complete (45/45); ABBY is 28/45. The five-site scope needs revisiting against real coverage. See [decision 005](decisions/005-observed-gpp-comparison/). |
 | **Phase 2: Hub 1 (Data Analysis)** | High | Issue #7. Simplest Hub first, per Maria's recommendation. ~0.5 day. |
-| **Phase 3: Hub 2 (Modeling / Kalman)** | High | Issue #8. Unblocked on data; still needs the negative-GPP filtering policy (#12). ~1 day. |
+| **Phase 3: Hub 2 (Modeling / Kalman)** | High | Issue #8. Fully unblocked. Jingyi confirmed the current filter ships for the demonstration (#14). **Blocked in practice by #29** — the filter returns R²=1.0 on model-unit GPP because its default process noise is ~73,000x the signal variance. |
 | **Extend the fit metrics** | Medium | Add seasonal-cycle and interannual-variability scoring to `compute_fit`, the genuine gap versus ILAMB. See [Goodness-of-fit evaluation](#goodness-of-fit-evaluation) below. |
-| **Phase 4: Hub 3 (Experimentation)** | Medium | Issue #9. Precip perturbation → two runs → t-test. ~1.5 days. |
-| **Phase 5: multi-site validation** | Medium | Issue #10. All 3 Hubs × 5 sites from a fresh pull. Scope to the 2018-01 → 2021-09 observation window. ~1 day. |
+| **Phase 4: Hub 3 (Experimentation)** | High | Issue #9. **Scope grew 2026-08-26.** Soil parameters and PFT switching are the priority; precipitation, the one already working, is the least interesting. Both are surface-dataset edits and share an implementation path. The t-test is still net-new. |
+| **Phase 5: sensitivity analysis** | Medium | Issue #10. **Reframed 2026-08-26** from validation to sensitivity analysis: perturbed run vs. control, measuring deviation in magnitude, lag and correlation. No tolerance needed. Uses the full 2018-2024 simulation, since it compares two model runs rather than model against observations. |
 | **Image size optimization** | Low | Investigate `--filter=blob:none` clone, BuildKit cache mounts. |
 
 ### Goodness-of-fit evaluation
@@ -282,7 +282,7 @@ project genuinely lacks. Bias alone is the weakest case — it can be near
 zero under a pure phase shift — but the broader point is interpretability
 across all four existing metrics.
 
-**Proposed direction: add the metrics, not the framework.** Fold
+**Decided 2026-08-26: add the metrics, not the framework.** Fold
 ILAMB-style seasonal-cycle and interannual-variability scoring into
 `compute_fit` rather than adopting ILAMB itself. The reasoning is in #13,
 but briefly: ILAMB's value is comparability through its curated global
@@ -290,12 +290,11 @@ reference datasets, and this project evaluates against NEON tower
 observations instead — so running its machinery over our own data
 forfeits most of the benefit that justifies the machinery.
 
-> **Not yet decided.** #13 is open and the choice is Jingyi's: whether
-> "ILAMB metrics" in `communication-internal` meant the package
-> specifically or goodness-of-fit generally. If it meant the package,
-> #18 becomes a stepping stone rather than the destination, and the
-> ~2-3 day ILAMB integration returns to scope. Nothing here should be
-> scheduled ahead of that answer.
+> **Confirmed by Jingyi, 2026-08-26.** "Let's add those two metrics to our
+> existing functionality for now without fully implementing ILAMB software on
+> our CI." The metrics also need to apply to soil water content and ET, not
+> GPP alone, and to run at daily as well as monthly resolution — correlation
+> tolerates the negative values that forced the monthly decision. See #18.
 
 ### Scope gaps to reconcile
 
@@ -304,9 +303,9 @@ stand-ins in the code. Flagged so they are not later read as delivered:
 
 | Feature | Doc says | Actual | Issue |
 |---------|----------|--------|-------|
-| ILAMB benchmarking | Done | Custom fit metrics (bias, R², residuals). Direction: extend the metrics, revisit ILAMB later — see above and Long-term. | #13 |
-| 5-step EnKF loop | Done | Simple/scalar Kalman filter, no ensemble | #14 |
-| PFT / soil / temperature perturbation | Listed | Only precipitation is codified | #3 |
+| ILAMB benchmarking | Done | **Resolved 2026-08-26.** Extend the existing metrics with seasonal-cycle and interannual-variability scoring; ILAMB package stays out of CI. | #13 closed |
+| 5-step EnKF loop | Done | **Resolved 2026-08-26.** The current filter ships for the demonstration. A true EnKF was the intended design, deferred for time rather than descoped on technical grounds — record it that way. | #14 closed |
+| PFT / soil / temperature perturbation | Listed | **Now the priority.** Soil parameters and PFT switching requested directly; temperature not raised. | #9 |
 
 ### Long-term
 
