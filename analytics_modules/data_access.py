@@ -61,6 +61,7 @@ COS_ACCESS_KEY_ID / COS_SECRET_ACCESS_KEY
 # ============================================================
 
 import os
+import re
 import time
 from typing import Iterable, List, Optional
 from pathlib import Path
@@ -70,6 +71,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 import fsspec
+import numpy as np
 import xarray as xr
 from glob import glob
 
@@ -234,6 +236,7 @@ def open_ctsm_hist_from_s3(
     parallel: bool = False,              # ✅ safer for remote file handles
     chunks=None,                         # keep None unless you really want dask
     preview_n: int = 10,
+    variables=None,
 ) -> xr.Dataset:
     """
     List CTSM 'hist' NetCDF files in S3 for a NEON site/year and open as xarray Dataset.
@@ -285,11 +288,17 @@ def open_ctsm_hist_from_s3(
     ofiles = fsspec.open_files(sim_uris, mode="rb", **storage_options)
     fileobjs = [f.open() for f in ofiles]
 
+    # Same selection as the local reader, so open_ctsm_hist(variables=...)
+    # means one thing regardless of which source resolves.
+    variables = _as_variable_list(variables)
+    preprocess = _select_variables(variables) if variables is not None else None
+
     start = time.time()
     try:
         ds_ctsm = xr.open_mfdataset(
             fileobjs,
             engine=engine,
+            preprocess=preprocess,
             decode_times=decode_times,
             combine=combine,
             parallel=parallel,
@@ -304,6 +313,8 @@ def open_ctsm_hist_from_s3(
                 pass
 
     print(f"Reading all simulation files took: {time.time() - start:.2f} seconds.")
+    if variables is not None:
+        _check_requested_variables(ds_ctsm, variables)
     return ds_ctsm
 
 
@@ -311,15 +322,20 @@ def open_ctsm_hist_from_s3(
 # 5b. Local (in-container / native) CTSM history access
 # ============================================================
 
+# Kept regardless of a `variables` selection: dropping the time axis to a
+# variable filter is never what the caller meant.
+TIME_BOOKKEEPING = frozenset({"time", "time_bounds", "mcdate", "mcsec"})
+
+# CTSM stamps a monthly file at the start of the *next* month: h0a.2018-07.nc
+# holds July but reports mcdate 20180801. The filename is the only place the
+# month the data belongs to is recorded, so it is read from there.
+MONTH_STAMP = re.compile(r"\.h0a?\.(\d{4}-\d{2})\.nc$")
+
 # CTSM 5.4 writes suffixed stream names: h0a monthly, h1a daily. Older output
 # -- including the S3 fixtures and the reference copies used as a validation
 # oracle -- uses unsuffixed h0/h1. Both have to stay readable, so the token is
 # discovered from what is actually on disk rather than assumed. Newest naming
 # is tried first so a directory holding both resolves to the current run.
-# Kept regardless of a `variables` selection: dropping the time axis to a
-# variable filter is never what the caller meant.
-TIME_BOOKKEEPING = frozenset({"time", "time_bounds", "mcdate", "mcsec"})
-
 STREAM_TOKENS = {
     "daily": ("h1a", "h1"),
     "monthly": ("h0a", "h0"),
@@ -411,6 +427,61 @@ def find_ctsm_hist_files(
     )
 
 
+def _as_variable_list(variables):
+    """Normalise a `variables` argument.
+
+    A bare string is the most likely mistake -- `variables="GPP"` -- and
+    `set("GPP")` is {"G", "P"}, which would select nothing and raise nothing.
+    """
+    if variables is None:
+        return None
+    if isinstance(variables, str):
+        return [variables]
+    return list(variables)
+
+
+def _select_variables(variables):
+    """Build an open_mfdataset preprocess that keeps `variables` plus time bookkeeping."""
+    keep = set(variables) | TIME_BOOKKEEPING
+
+    def _select(dataset):
+        return dataset[[name for name in dataset.data_vars if name in keep]]
+
+    return _select
+
+
+def _check_requested_variables(dataset, variables) -> None:
+    """Raise if any requested variable matched nothing.
+
+    A filter that matches nothing returns a dataset with a correct time axis
+    and no data, which downstream reads as "no data for that period" rather
+    than as a typo. That is the silent-empty failure this module exists to
+    prevent, so it is an error.
+    """
+    missing = sorted(set(variables) - set(dataset.variables))
+    if missing:
+        raise KeyError(
+            f"Requested variables not present in the history files: {missing}. "
+            "Check the spelling, and whether the variable is on this stream -- "
+            "several water-flux variables are monthly-only (see docs/data-contract.md)."
+        )
+
+
+def _label_months(dataset):
+    """Attach a `month` coordinate ('YYYY-MM') read from the file the data came from.
+
+    Only the monthly filenames carry the stamp; anything else passes through
+    unchanged. Attached as a coordinate so it travels with the values through
+    combine="by_coords", instead of being zipped on afterwards from a
+    separately ordered file list.
+    """
+    match = MONTH_STAMP.search(str(dataset.encoding.get("source", "")))
+    if match is None or "time" not in dataset.sizes:
+        return dataset
+    labels = np.array([match.group(1)] * dataset.sizes["time"])
+    return dataset.assign_coords(month=("time", labels))
+
+
 def _engine_for_local(path: str) -> str:
     """Pick an xarray engine from the file's magic number.
 
@@ -457,29 +528,38 @@ def open_ctsm_hist_local(
             file: selecting three takes ~10 s where reading everything takes
             ~117 s. Time bookkeeping (time, time_bounds, mcdate, mcsec) is
             always retained, since losing the time axis to a variable
-            selection is never what the caller meant.
+            selection is never what the caller meant. A single name may be
+            passed as a string. A name that matches nothing raises KeyError
+            rather than returning a dataset with no data.
         drop_variables: Passed to xarray. Useful for skipping the large
             static soil-property fields repeated in every file.
 
     Returns:
-        xr.Dataset spanning all matched files.
+        xr.Dataset spanning all matched files. On the monthly stream it carries
+        a `month` coordinate ('YYYY-MM') along time, read from each filename,
+        because `mcdate` on those files is stamped at the start of the *next*
+        month and would shift a month index forward by one.
 
     Raises:
         FileNotFoundError: if nothing matches, listing the paths tried.
+        KeyError: if a requested variable is absent from the files.
     """
     sim_files = find_ctsm_hist_files(
         neon_site, year, output_root=output_root, stream=stream, input_label=input_label
     )
     print(f"All Simulation files: [{len(sim_files)} files]")
 
-    preprocess = None
+    variables = _as_variable_list(variables)
+    steps = []
     if variables is not None:
-        wanted = set(variables) | TIME_BOOKKEEPING
+        steps.append(_select_variables(variables))
+    if stream == "monthly":
+        steps.append(_label_months)
 
-        def _select(dataset):
-            return dataset[[v for v in dataset.data_vars if v in wanted]]
-
-        preprocess = _select
+    def preprocess(dataset):
+        for step in steps:
+            dataset = step(dataset)
+        return dataset
 
     start = time.time()
     # This emits a FutureWarning about the `data_vars` default. Do not silence
@@ -498,6 +578,8 @@ def open_ctsm_hist_local(
         chunks=chunks,
     )
     print(f"Reading all simulation files took: {time.time() - start:.2f} seconds.")
+    if variables is not None:
+        _check_requested_variables(ds_ctsm, variables)
     return ds_ctsm
 
 

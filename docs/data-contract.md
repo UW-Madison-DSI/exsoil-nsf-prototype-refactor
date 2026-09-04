@@ -171,14 +171,18 @@ Also present: `mcdate` (int `YYYYMMDD`), `mcsec` (seconds of day),
 > the correlation from **0.872 to 0.767** and loses a month at the series
 > boundary.
 >
-> Parse the month from the filename:
+> `open_ctsm_hist(site, stream="monthly")` reads the month from each filename
+> and attaches it as a `month` coordinate (`YYYY-MM`) along `time`, so the
+> label travels with the values through `combine="by_coords"`:
 >
 > ```python
-> months = [re.search(r"h0[a]?\.(\d{4}-\d{2})", f).group(1)
->           for f in find_ctsm_hist_files(site, stream="monthly")]
+> monthly = open_ctsm_hist(site, stream="monthly", variables=["GPP"])
+> index = pd.PeriodIndex(monthly["month"].values, freq="M")
 > ```
 >
-> The daily stream is not affected -- its filenames and `mcdate` agree.
+> Build month indexes from that coordinate, never from `mcdate`. The daily
+> stream is not affected -- its filenames and `mcdate` agree -- and carries no
+> `month` coordinate.
 
 **Engine — resolved in Phase 1, and not what this document originally
 guessed.** Live output is **CDF-5** (magic bytes `CDF\x05`), verified on disk;
