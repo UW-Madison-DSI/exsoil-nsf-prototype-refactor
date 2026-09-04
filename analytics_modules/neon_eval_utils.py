@@ -158,136 +158,16 @@ def residuals_plots(
     return fig, residuals, metrics, conclusion
 
 
+# The filter lives in kalman_filter.py. It used to be duplicated here, and the two
+# copies drifted (issue #29). Re-exported so `from .neon_eval_utils import ...`
+# and `from analytics_modules import ...` keep working.
+from .kalman_filter import (  # noqa: E402,F401
+    DegenerateCalibrationError,
+    DegenerateCalibrationWarning,
+    kalman_filter,
+    kalman_gain_bias,
+)
 
-def kalman_filter(df, var):
-    '''
-    '''
-    
-    df_clean = df.dropna(subset=[var, 'sim_'+var])
-    
-    sim = df_clean[var] 
-    obs = df_clean['sim_'+var]
-    x_est = sim[0]                # Start from the model
-    P = 1.0                       # Initial uncertainty, also empirical
-    Q = 1e-3                      # Process variance small, empirically defined
-    R = 0.1 * np.var(obs - sim)  # Measurement noise: trust model more than obs
-
-    kalman_estimates = []
-
-    for i in range(len(obs)):
-        z = obs[i]       # Observation
-        x_pred = sim[i]  # Model prediction
-
-        # Prediction uncertainty update
-        P_pred = P + Q
-
-        # Kalman gain
-        K = P_pred / (P_pred + R)
-
-        # State update
-        x_est = x_pred + K * (z - x_pred)
-
-        # Uncertainty update
-        P = (1 - K) * P_pred
-
-        kalman_estimates.append(x_est)
-
-    # Bias correction (optional)
-    kalman_estimates = np.array(kalman_estimates)
-    bias = np.mean(kalman_estimates - obs) #this correction shifts it to have zero mean bias.
-    kalman_corrected = kalman_estimates - bias
-
-    # Save to dataframe
-    df_clean["kalman_"+var] = kalman_estimates
-    df_clean["kalman_"+var+"_bias_corrected"] = kalman_corrected
-    
-    return df_clean
-
-
-import numpy as np
-import pandas as pd
-from scipy import stats
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-import pandas as pd
-import matplotlib.pyplot as plt
-
-# ---------- 4) Kalman with time-varying bias & gain (+ optional diurnal harmonics) ----------
-def kalman_gain_bias(y_obs, y_sim, hours=None, Q_diag=(1e-4, 1e-4, 1e-6, 1e-6), R0_scale=0.1, smooth=True):
-    """
-    Linear state-space with predictor vector h_t = [1, sim_t, sin(wt), cos(wt)] (last two optional).
-        state θ_t = [bias_t, gain_t, s_t, c_t]';  θ_t = θ_{t-1} + w_t,  w~N(0,Q)
-        obs   y_t = h_t · θ_t + v_t,            v~N(0,R_t)
-    If hours is None -> model uses [1, sim_t] only.
-    """
-    y_obs, y_sim = np.asarray(y_obs, float), np.asarray(y_sim, float)
-    m = np.isfinite(y_obs) & np.isfinite(y_sim)
-    y, s = y_obs[m], y_sim[m]
-    n = len(y)
-    use_harm = hours is not None
-    if use_harm:
-        h = (np.asarray(hours, int)%24)[m]
-        w = 2*np.pi/24.0
-        H = np.column_stack([np.ones(n), s, np.sin(w*h), np.cos(w*h)])
-        Q = np.diag([Q_diag[0], Q_diag[1], Q_diag[2], Q_diag[3]])
-    else:
-        H = np.column_stack([np.ones(n), s])
-        Q = np.diag([Q_diag[0], Q_diag[1]])
-    dim = H.shape[1]
-
-    # init
-    theta = np.zeros(dim)
-    P = np.eye(dim)
-    R = R0_scale * np.var(y - s) if np.isfinite(np.var(y - s)) else 1.0
-    R = max(R, 1e-8)
-
-    theta_f = np.zeros((n, dim))
-    P_f = np.zeros((n, dim))
-    K_hist = np.zeros(n)
-    innov = np.zeros(n)
-    S_hist = np.zeros(n)
-
-    # filter
-    for t in range(n):
-        # predict
-        theta_pred = theta
-        P_pred = P + Q
-        ht = H[t]
-        # innovation
-        v = y[t] - ht @ theta_pred
-        S = float(ht @ P_pred @ ht + R)
-        K = (P_pred @ ht) / S
-        # update
-        theta = theta_pred + K * v
-        P = (np.eye(dim) - np.outer(K, ht)) @ P_pred
-
-        theta_f[t] = theta
-        P_f[t] = np.diag(P)
-        K_hist[t] = K[1] if dim>1 else K[0]
-        innov[t] = v
-        S_hist[t] = S
-
-        # simple adaptive R (EMA)
-        R_est = max(v*v - float(ht @ P_pred @ ht), 1e-10)
-        R = 0.95*R + 0.05*R_est
-
-    # calibrated
-    y_cal = np.sum(H * theta_f, axis=1)
-    lo = y_cal - 1.96 * np.sqrt(np.maximum(np.sum((H**2)*P_f, axis=1), 1e-12))
-    hi = y_cal + 1.96 * np.sqrt(np.maximum(np.sum((H**2)*P_f, axis=1), 1e-12))
-
-    # RTS smoother (optional)
-    if smooth:
-        theta_s = theta_f.copy()
-        Pd = np.diag(Q)  # for random walk
-        for t in range(n-2, -1, -1):
-            P_pred_next = np.diag(P_f[t] + Pd)
-            J = np.diag(P_f[t]) @ np.linalg.pinv(P_pred_next)
-            theta_s[t] = theta_f[t] + (J @ (theta_s[t+1] - theta_f[t+1]))
-        y_smooth = np.sum(H * theta_s, axis=1)
-    else:
-        y_smooth = None
-
-    return y_cal, (lo, hi), y_smooth, {"theta_seq": theta_f, "innov": innov, "S": S_hist}
 
 # ---------- Orchestrator ----------
 def calibrate_and_evaluate(df, col, method="auto", hour_col=None):
@@ -310,6 +190,15 @@ def calibrate_and_evaluate(df, col, method="auto", hour_col=None):
 
     print("--------------------- Observations vs KF Assimilation")
     y_cal, (lo, hi), y_smooth, info = kalman_gain_bias(y_obs, y_sim, hours=hours)
+    if info["degenerate"]:
+        # A near-zero gain means the bias term reproduced the observations on
+        # its own. The post-calibration metrics would report a near-perfect fit
+        # that says nothing about the model, so refuse rather than print them.
+        raise DegenerateCalibrationError(
+            f"Kalman calibration of {col!r} is degenerate (standardised gain "
+            f"{info['gain_standardised']:.3g}); the filter ignored the model. Check that "
+            "observations and simulations are in the same units, and see issue #29."
+        )
     d["cal_lo"], d["cal_hi"] = lo, hi
     if y_smooth is not None:
         d["cal_smooth"] = y_smooth

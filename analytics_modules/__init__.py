@@ -4,8 +4,9 @@ Re-exports the most commonly used functions so notebooks can do
 `from analytics_modules import ctsm_sim_depth, residuals_plots, ...`
 without needing to know which submodule defines what.
 
-For names that appear in both kalman_filter.py and neon_eval_utils.py,
-the neon_eval_utils version wins (the project-canonical implementation).
+The Kalman filter is defined once, in kalman_filter.py; neon_eval_utils
+re-exports it, so both import paths are the same function. Before #29 it
+was forked into both files, and a fix could land in one copy only.
 
 Each submodule is imported defensively so a missing function in one
 optional module doesn't break notebooks that only use a different one.
@@ -21,6 +22,8 @@ from .neon_eval_utils import (
     calibrate_and_evaluate,
     kalman_filter,
     kalman_gain_bias,
+    DegenerateCalibrationError,
+    DegenerateCalibrationWarning,
 )
 
 # S3 + visualization (core — required)

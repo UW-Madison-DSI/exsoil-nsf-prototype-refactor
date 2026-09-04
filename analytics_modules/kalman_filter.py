@@ -1,11 +1,23 @@
 """
 Kalman filter calibration for CTSM simulation outputs.
+
+This is the single home of the filter. ``neon_eval_utils`` re-exports these
+names so both import paths resolve to the same function; a second copy used
+to live there and the two drifted (issue #29).
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
-from .model_misfit import residuals_plots
+
+class DegenerateCalibrationWarning(UserWarning):
+    """The filter learned to ignore the model and reproduce the observations."""
+
+
+class DegenerateCalibrationError(ValueError):
+    """Raised by orchestrators when a calibration is degenerate and its metrics would mislead."""
 
 
 def kalman_filter(df, var):
@@ -43,17 +55,65 @@ def kalman_filter(df, var):
     return df_clean
 
 
-def kalman_gain_bias(y_obs, y_sim, hours=None, Q_diag=(1e-4, 1e-4, 1e-6, 1e-6), R0_scale=0.1, smooth=True):
+def kalman_gain_bias(
+    y_obs,
+    y_sim,
+    hours=None,
+    Q_diag=(1e-4, 1e-4, 1e-6, 1e-6),
+    R0_scale=0.1,
+    smooth=True,
+    scale: float | None = None,
+    gain_floor: float = 0.05,
+):
     """
     Linear state-space with predictor vector h_t = [1, sim_t, sin(wt), cos(wt)] (last two optional).
         state theta_t = [bias_t, gain_t, s_t, c_t]';  theta_t = theta_{t-1} + w_t,  w~N(0,Q)
         obs   y_t = h_t . theta_t + v_t,              v~N(0,R_t)
     If hours is None -> model uses [1, sim_t] only.
+
+    The filter runs on both series divided by a common ``scale`` (default: the
+    standard deviation of the finite observations). ``Q_diag`` and the initial
+    state covariance are therefore relative to the size of the signal, and the
+    result does not depend on whether GPP arrives in gC m-2 s-1 or umol m-2 s-1.
+    Without this, the default process noise is ~73,000x the variance of
+    model-unit GPP, the bias term absorbs the observations outright, and the
+    filter returns R^2 = 1.0 with a dead gain (issue #29). Pass ``scale=1.0``
+    to run on raw units.
+
+    The gain is dimensionless, so it is unaffected by the scaling; bias, the
+    harmonic amplitudes, the calibrated series and its interval are scaled
+    back before they are returned.
+
+    A filter that is ignoring the model is reported as ``info["degenerate"]``
+    and a ``DegenerateCalibrationWarning``, never as a good fit. The test is
+    on the *standardised* gain, the median learned gain times
+    ``std(sim) / std(obs)``: the fraction of the observed variability that
+    reaches the output through the model path. A raw gain of 0.03 is
+    legitimate when the model's amplitude is 30x the observations', so the
+    raw gain is not compared with ``gain_floor``; the standardised gain is.
+
+    Returns ``y_cal, (lo, hi), y_smooth, info`` where ``info`` carries
+    ``theta_seq``, ``innov``, ``S``, ``scale``, ``gain_median``,
+    ``gain_standardised``, ``gain_final`` and ``degenerate``.
     """
     y_obs, y_sim = np.asarray(y_obs, float), np.asarray(y_sim, float)
     m = np.isfinite(y_obs) & np.isfinite(y_sim)
     y, s = y_obs[m], y_sim[m]
     n = len(y)
+
+    obs_std = float(np.std(y)) if n else 0.0
+    sim_std = float(np.std(s)) if n else 0.0
+    if scale is None:
+        # Observations first; if they are constant, the model's spread is the
+        # only signal left. Falling straight back to 1.0 would re-enter the
+        # raw-unit regime this normalisation exists to avoid.
+        scale = obs_std if obs_std > 0 else sim_std
+    scale = float(scale)
+    if not np.isfinite(scale) or scale <= 0:
+        scale = 1.0
+    y = y / scale
+    s = s / scale
+
     use_harm = hours is not None
     if use_harm:
         h = (np.asarray(hours, int) % 24)[m]
@@ -96,8 +156,9 @@ def kalman_gain_bias(y_obs, y_sim, hours=None, Q_diag=(1e-4, 1e-4, 1e-6, 1e-6), 
         R = 0.95 * R + 0.05 * R_est
 
     y_cal = np.sum(H * theta_f, axis=1)
-    lo = y_cal - 1.96 * np.sqrt(np.maximum(np.sum((H ** 2) * P_f, axis=1), 1e-12))
-    hi = y_cal + 1.96 * np.sqrt(np.maximum(np.sum((H ** 2) * P_f, axis=1), 1e-12))
+    half_width = 1.96 * np.sqrt(np.maximum(np.sum((H ** 2) * P_f, axis=1), 1e-12))
+    lo = y_cal - half_width
+    hi = y_cal + half_width
 
     if smooth:
         theta_s = theta_f.copy()
@@ -106,38 +167,42 @@ def kalman_gain_bias(y_obs, y_sim, hours=None, Q_diag=(1e-4, 1e-4, 1e-6, 1e-6), 
             P_pred_next = np.diag(P_f[t] + Pd)
             J = np.diag(P_f[t]) @ np.linalg.pinv(P_pred_next)
             theta_s[t] = theta_f[t] + (J @ (theta_s[t + 1] - theta_f[t + 1]))
-        y_smooth = np.sum(H * theta_s, axis=1)
+        y_smooth = np.sum(H * theta_s, axis=1) * scale
     else:
         y_smooth = None
 
-    return y_cal, (lo, hi), y_smooth, {"theta_seq": theta_f, "innov": innov, "S": S_hist}
+    # Back to the caller's units. Column 1 of theta is the gain, which is
+    # dimensionless; every other state component multiplies a predictor of
+    # order one and so carries the units of y.
+    theta_out = theta_f * scale
+    theta_out[:, 1] = theta_f[:, 1]
 
+    gain = theta_f[:, 1]
+    gain_median = float(np.median(gain)) if n else np.nan
+    gain_final = float(gain[-1]) if n else np.nan
+    # Constant observations or a constant model leave nothing for the model
+    # path to explain, so both count as zero explained variability.
+    gain_standardised = gain_median * sim_std / obs_std if obs_std > 0 else 0.0
+    degenerate = bool(n) and abs(gain_standardised) < gain_floor
+    if degenerate:
+        warnings.warn(
+            f"Kalman calibration is degenerate: standardised gain {gain_standardised:.3g} "
+            f"(median learned gain {gain_median:.3g} x std(sim)/std(obs)) is below "
+            f"{gain_floor}. The filter is ignoring the model and reproducing the "
+            "observations through the bias term, so any post-calibration fit "
+            "statistic is meaningless.",
+            DegenerateCalibrationWarning,
+            stacklevel=2,
+        )
 
-def calibrate_and_evaluate(df, col, method="auto", hour_col=None):
-    """Run Kalman calibration and produce before/after misfit diagnostics."""
-    d = df.dropna(subset=[col, "sim_" + col]).copy()
-    y_obs = d[col].to_numpy(float)
-    y_sim = d["sim_" + col].to_numpy(float)
-    hours = d[hour_col].to_numpy(int) if (hour_col and hour_col in d) else None
-
-    print("--------------------- Observations vs simulations")
-    fig, residuals, metrics_pre, conclusion_pre = residuals_plots(
-        y_obs, y_sim, bins=40, savepath=None,
-    )
-    print(conclusion_pre)
-    print(metrics_pre)
-
-    print("--------------------- Observations vs KF Assimilation")
-    y_cal, (lo, hi), y_smooth, info = kalman_gain_bias(y_obs, y_sim, hours=hours)
-    d["cal_lo"], d["cal_hi"] = lo, hi
-    if y_smooth is not None:
-        d["cal_smooth"] = y_smooth
-    pars = {"kf": "bias+gain" + ("+harmonics" if hours is not None else "")}
-
-    d["cali_sim_" + col] = y_cal
-    fig, residuals, metrics_post, conclusion_post = residuals_plots(
-        y_obs, d["cali_sim_" + col].to_numpy(float), bins=40, savepath=None,
-    )
-    print(conclusion_post)
-    print(metrics_post)
-    return d, {"pre_metrics": metrics_pre, "post_metrics": metrics_post, "method": method, "params": pars}
+    info = {
+        "theta_seq": theta_out,
+        "innov": innov * scale,
+        "S": S_hist * scale ** 2,
+        "scale": scale,
+        "gain_median": gain_median,
+        "gain_standardised": gain_standardised,
+        "gain_final": gain_final,
+        "degenerate": degenerate,
+    }
+    return y_cal * scale, (lo * scale, hi * scale), y_smooth, info
