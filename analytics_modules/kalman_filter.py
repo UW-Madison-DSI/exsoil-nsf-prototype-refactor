@@ -84,21 +84,30 @@ def kalman_gain_bias(
     harmonic amplitudes, the calibrated series and its interval are scaled
     back before they are returned.
 
-    A learned gain whose median magnitude is below ``gain_floor`` means the
-    filter is ignoring the model. That is reported as ``info["degenerate"]``
-    and a ``DegenerateCalibrationWarning``, never as a good fit.
+    A filter that is ignoring the model is reported as ``info["degenerate"]``
+    and a ``DegenerateCalibrationWarning``, never as a good fit. The test is
+    on the *standardised* gain, the median learned gain times
+    ``std(sim) / std(obs)``: the fraction of the observed variability that
+    reaches the output through the model path. A raw gain of 0.03 is
+    legitimate when the model's amplitude is 30x the observations', so the
+    raw gain is not compared with ``gain_floor``; the standardised gain is.
 
     Returns ``y_cal, (lo, hi), y_smooth, info`` where ``info`` carries
-    ``theta_seq``, ``innov``, ``S``, ``scale``, ``gain_median``, ``gain_final``
-    and ``degenerate``.
+    ``theta_seq``, ``innov``, ``S``, ``scale``, ``gain_median``,
+    ``gain_standardised``, ``gain_final`` and ``degenerate``.
     """
     y_obs, y_sim = np.asarray(y_obs, float), np.asarray(y_sim, float)
     m = np.isfinite(y_obs) & np.isfinite(y_sim)
     y, s = y_obs[m], y_sim[m]
     n = len(y)
 
+    obs_std = float(np.std(y)) if n else 0.0
+    sim_std = float(np.std(s)) if n else 0.0
     if scale is None:
-        scale = float(np.std(y)) if n else 1.0
+        # Observations first; if they are constant, the model's spread is the
+        # only signal left. Falling straight back to 1.0 would re-enter the
+        # raw-unit regime this normalisation exists to avoid.
+        scale = obs_std if obs_std > 0 else sim_std
     scale = float(scale)
     if not np.isfinite(scale) or scale <= 0:
         scale = 1.0
@@ -171,12 +180,16 @@ def kalman_gain_bias(
     gain = theta_f[:, 1]
     gain_median = float(np.median(gain)) if n else np.nan
     gain_final = float(gain[-1]) if n else np.nan
-    degenerate = bool(n) and abs(gain_median) < gain_floor
+    # Constant observations or a constant model leave nothing for the model
+    # path to explain, so both count as zero explained variability.
+    gain_standardised = gain_median * sim_std / obs_std if obs_std > 0 else 0.0
+    degenerate = bool(n) and abs(gain_standardised) < gain_floor
     if degenerate:
         warnings.warn(
-            f"Kalman calibration is degenerate: median learned gain {gain_median:.3g} "
-            f"is below {gain_floor}. The filter is ignoring the model and reproducing "
-            "the observations through the bias term, so any post-calibration fit "
+            f"Kalman calibration is degenerate: standardised gain {gain_standardised:.3g} "
+            f"(median learned gain {gain_median:.3g} x std(sim)/std(obs)) is below "
+            f"{gain_floor}. The filter is ignoring the model and reproducing the "
+            "observations through the bias term, so any post-calibration fit "
             "statistic is meaningless.",
             DegenerateCalibrationWarning,
             stacklevel=2,
@@ -188,6 +201,7 @@ def kalman_gain_bias(
         "S": S_hist * scale ** 2,
         "scale": scale,
         "gain_median": gain_median,
+        "gain_standardised": gain_standardised,
         "gain_final": gain_final,
         "degenerate": degenerate,
     }

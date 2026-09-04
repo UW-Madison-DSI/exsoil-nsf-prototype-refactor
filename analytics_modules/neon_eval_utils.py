@@ -195,8 +195,8 @@ def calibrate_and_evaluate(df, col, method="auto", hour_col=None):
         # its own. The post-calibration metrics would report a near-perfect fit
         # that says nothing about the model, so refuse rather than print them.
         raise DegenerateCalibrationError(
-            f"Kalman calibration of {col!r} is degenerate (median learned gain "
-            f"{info['gain_median']:.3g}); the filter ignored the model. Check that "
+            f"Kalman calibration of {col!r} is degenerate (standardised gain "
+            f"{info['gain_standardised']:.3g}); the filter ignored the model. Check that "
             "observations and simulations are in the same units, and see issue #29."
         )
     d["cal_lo"], d["cal_hi"] = lo, hi

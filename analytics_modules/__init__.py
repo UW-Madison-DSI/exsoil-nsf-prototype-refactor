@@ -5,8 +5,8 @@ Re-exports the most commonly used functions so notebooks can do
 without needing to know which submodule defines what.
 
 The Kalman filter is defined once, in kalman_filter.py; neon_eval_utils
-re-exports it, so both import paths are the same function (issue #29 was a
-fix landing in one of two forked copies).
+re-exports it, so both import paths are the same function. Before #29 it
+was forked into both files, and a fix could land in one copy only.
 
 Each submodule is imported defensively so a missing function in one
 optional module doesn't break notebooks that only use a different one.
