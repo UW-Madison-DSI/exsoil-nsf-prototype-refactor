@@ -94,9 +94,14 @@ Two further points from the same reply. The metrics apply to **soil water
 content and ET**, not GPP alone — so negative-value handling must not be
 GPP-specific. And **ET is absent from the daily stream** (`QFLX_EVAP_TOT`,
 `EFLX_LH_TOT`, `QSOIL`, `QVEGE`, `QVEGT` are monthly-only), so daily ET has to
-be derived from `FCEV + FCTR + FGEV`. Whether to add it to the model's output
-configuration is an open question with Jingyi, and it is cheaper to decide
-before the remaining four sites are run.
+be derived from `FCEV + FCTR + FGEV`.
+
+**Settled 2026-09-04.** Jingyi answered the output-configuration question:
+derive ET from the three latent heat components at both resolutions, and
+keep the components alongside the total, because he intends to supply
+partitioned tower ET later and evaluate the components as well as the sum.
+No change to the model's output configuration; the remaining four sites run
+as-is. Recorded in #18.
 
 Tracked in #18.
 

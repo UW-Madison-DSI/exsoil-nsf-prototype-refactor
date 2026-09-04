@@ -14,7 +14,7 @@ Execution for that phase is planned and tracked separately:
 - Execution tracker: GitHub epic **#11** (phase issues #5-#10, scope decisions #12-#14)
 - Shareable status: [docs/project-summary/hub-integration-progress-report.md](project-summary/hub-integration-progress-report.md)
 
-Last updated: 2026-08-26
+Last updated: 2026-09-04
 
 ---
 
@@ -255,8 +255,8 @@ epic #11. Summarized here:
 | **Rescope Phase 3/5 site coverage** | High | **41 of 225 site-months have no GPP at all** (18%). Only KONZ is complete (45/45); ABBY is 28/45. The five-site scope needs revisiting against real coverage. See [decision 005](decisions/005-observed-gpp-comparison/). |
 | **Phase 2: Hub 1 (Data Analysis)** | High | Issue #7. Simplest Hub first, per Maria's recommendation. ~0.5 day. |
 | **Phase 3: Hub 2 (Modeling / Kalman)** | High | Issue #8. Fully unblocked. Jingyi confirmed the current filter ships for the demonstration (#14). **Blocked in practice by #29** — the filter returns R²=1.0 on model-unit GPP because its default process noise is ~73,000x the signal variance. |
-| **Extend the fit metrics** | Medium | Add seasonal-cycle and interannual-variability scoring to `compute_fit`, the genuine gap versus ILAMB. See [Goodness-of-fit evaluation](#goodness-of-fit-evaluation) below. |
-| **Phase 4: Hub 3 (Experimentation)** | High | Issue #9. **Scope grew 2026-08-26.** Soil parameters and PFT switching are the priority; precipitation, the one already working, is the least interesting. Both are surface-dataset edits and share an implementation path. The t-test is still net-new. |
+| **Extend the fit metrics** | Medium | Issue #18. Add seasonal-cycle and interannual-variability scoring to `compute_fit`, the genuine gap versus ILAMB. Applies to GPP, `H2OSOI` and ET, daily and monthly. **ET decided 2026-09-04:** derive the total from `FCTR + FCEV + FGEV` at both resolutions and keep the three components alongside the total, so partitioned tower ET can be compared component-wise later. No output-configuration change; the remaining four sites run as-is. See [Goodness-of-fit evaluation](#goodness-of-fit-evaluation) below. |
+| **Phase 4: Hub 3 (Experimentation)** | High | Issue #9. **Scope grew 2026-08-26, settled 2026-09-04.** Soil parameters and PFT switching are the priority; precipitation, the one already working, is the least interesting. Jingyi confirmed the four soil parameters: sand, clay, organic matter, bedrock depth (`PCT_SAND`, `PCT_CLAY`, `ORGANIC`, `zbedrock`). All four plus `PCT_NAT_PFT` are surface-dataset edits and share an implementation path. The t-test is still net-new. Nothing waits on Jingyi. |
 | **Phase 5: sensitivity analysis** | Medium | Issue #10. **Reframed 2026-08-26** from validation to sensitivity analysis: perturbed run vs. control, measuring deviation in magnitude, lag and correlation. No tolerance needed. Uses the full 2018-2024 simulation, since it compares two model runs rather than model against observations. |
 | **Image size optimization** | Low | Investigate `--filter=blob:none` clone, BuildKit cache mounts. |
 
@@ -296,6 +296,13 @@ forfeits most of the benefit that justifies the machinery.
 > GPP alone, and to run at daily as well as monthly resolution — correlation
 > tolerates the negative values that forced the monthly decision. See #18.
 
+> **ET, confirmed by Jingyi, 2026-09-04.** "Please derive it from the three
+> individual latent heat flux components but can you also keep the individual
+> compounds as saved output alongside the total ET." The daily stream already
+> carries `FCTR`, `FCEV` and `FGEV`, so no re-run is needed. He intends to
+> supply partitioned tower ET later, so the comparison must accept
+> per-component observations, not only a total.
+
 ### Scope gaps to reconcile
 
 `communication-internal` marks two features "done" that are simpler
@@ -305,7 +312,7 @@ stand-ins in the code. Flagged so they are not later read as delivered:
 |---------|----------|--------|-------|
 | ILAMB benchmarking | Done | **Resolved 2026-08-26.** Extend the existing metrics with seasonal-cycle and interannual-variability scoring; ILAMB package stays out of CI. | #13 closed |
 | 5-step EnKF loop | Done | **Resolved 2026-08-26.** The current filter ships for the demonstration. A true EnKF was the intended design, deferred for time rather than descoped on technical grounds — record it that way. | #14 closed |
-| PFT / soil / temperature perturbation | Listed | **Now the priority.** Soil parameters and PFT switching requested directly; temperature not raised. | #9 |
+| PFT / soil / temperature perturbation | Listed | **Now the priority; scope settled 2026-09-04.** Four soil parameters (sand, clay, organic matter, bedrock depth) plus PFT switching; temperature not raised. | #9 |
 
 ### Long-term
 
