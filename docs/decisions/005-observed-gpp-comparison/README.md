@@ -1,6 +1,7 @@
 # Observed GPP: comparison resolution and coverage
 
-**Status:** Decided — monthly comparison, revisit finer resolution later
+**Status:** Decided — monthly for bias-type metrics, daily alongside it for
+correlation. Amended 2026-08-26 after Jingyi's review.
 **Date:** 2026-08-25
 **Decides:** issue #12 (observed-GPP filtering policy)
 **Affects:** Phase 3 / Hub 2 (#8), Phase 5 validation (#10), fit metrics (#18)
@@ -64,6 +65,45 @@ bias, nothing discarded.
 | Half-hourly | 26-36% |
 | Daily mean | 2-30% by site (CPER worst at 30%, ABBY best at 2%) |
 | **Monthly mean** | **15 of 184 (8%)** |
+
+## Amendment, 2026-08-26
+
+Jingyi asked for both resolutions, and the reasoning holds:
+
+> "I wonder whether we can keep both daily and monthly benchmarking/comparison
+> options. As ILAMB metrics include something beyond bias (e.g., correlation),
+> the negative values still have some merits... There are diurnal signals in ET
+> (and sometimes in soil moisture) so it is helpful to include the daily
+> comparisons alongside the monthly comparison."
+
+This does not reverse the analysis below; it sharpens what the analysis was
+actually about. **Aggregation was needed for bias-type metrics**, where a
+negative observation drags the mean and the error is not symmetric in its
+effect. **Correlation is insensitive to that offset**, so it can run on
+half-hourly or daily data where monthly averaging would destroy the diurnal
+structure worth examining.
+
+So the resolution is per-metric, not global:
+
+| Metric | Resolution | Reason |
+|---|---|---|
+| Bias, RMSE, MAE | monthly | negatives distort the magnitude |
+| Correlation, seasonal cycle, interannual variability | daily and monthly | tolerant of the offset; daily preserves diurnal signal |
+
+Two further points from the same reply. The metrics apply to **soil water
+content and ET**, not GPP alone — so negative-value handling must not be
+GPP-specific. And **ET is absent from the daily stream** (`QFLX_EVAP_TOT`,
+`EFLX_LH_TOT`, `QSOIL`, `QVEGE`, `QVEGT` are monthly-only), so daily ET has to
+be derived from `FCEV + FCTR + FGEV`.
+
+**Settled 2026-09-04.** Jingyi answered the output-configuration question:
+derive ET from the three latent heat components at both resolutions, and
+keep the components alongside the total, because he intends to supply
+partitioned tower ET later and evaluate the components as well as the sum.
+No change to the model's output configuration; the remaining four sites run
+as-is. Recorded in #18.
+
+Tracked in #18.
 
 ## Decision
 

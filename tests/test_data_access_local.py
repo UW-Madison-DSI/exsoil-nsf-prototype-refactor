@@ -182,3 +182,167 @@ class TestLegacyReferenceCopies:
     def test_opens_non_empty_dataset(self):
         dataset = open_ctsm_hist("CLBJ", 2019, output_root=REFERENCE_ROOT)
         assert dataset.sizes.get("time", 0) > 0
+
+
+def write_history_file(directory, site, stamp, variables, stream="h1a", day_index=0,
+                       n_steps=4, netcdf_format=None):
+    """Write a minimal CTSM-shaped history file.
+
+    Enough structure to exercise discovery and variable selection without a
+    completed simulation: a time axis, the bookkeeping variables CTSM emits
+    alongside it (including `time_bounds`, the one a variable filter is most
+    likely to lose), and whatever data variables the test asks for.
+
+    Values are offset per file so a test can tell which file a row came from.
+    """
+    import numpy as np
+    import xarray as xr
+
+    n = n_steps
+    # Distinct time values per file, or combine="by_coords" cannot order them.
+    # Real CTSM files differ this way naturally; synthetic ones must be made to.
+    offset = float(day_index * n)
+    times = offset + np.arange(n, dtype=float)
+    data = {name: (("time",), offset + np.arange(n, dtype=float)) for name in variables}
+    data["mcdate"] = (("time",), np.full(n, 20180101 + day_index, dtype=int))
+    data["mcsec"] = (("time",), np.arange(n, dtype=int) * 1800)
+    data["time_bounds"] = (("time", "nbnd"), np.column_stack([times - 0.5, times + 0.5]))
+    dataset = xr.Dataset(data, coords={"time": times})
+    dataset.time.attrs["units"] = "days since 2018-01-01 00:00:00"
+
+    target = Path(directory) / "archive" / "lnd" / "hist"
+    target.mkdir(parents=True, exist_ok=True)
+    path = target / f"{site}.transient.clm2.{stream}.{stamp}.nc"
+    dataset.to_netcdf(path, format=netcdf_format)
+    return path
+
+
+@pytest.mark.tier0
+class TestVariableSelection:
+    """Selecting variables at open time, without needing a real run.
+
+    The monthly stream carries 623 variables per file; reading all of them
+    takes ~117 s where selecting three takes ~10 s. The risk in that
+    optimisation is silently losing the time axis, so that is what these pin.
+    """
+
+    @pytest.fixture
+    def synthetic_run(self, tmp_path):
+        stamps = ("2018-01-01-01800", "2018-01-02-01800")
+        for day_index, stamp in enumerate(stamps):
+            write_history_file(tmp_path, "KONZ", stamp, ["GPP", "TSOI", "FSH"],
+                               day_index=day_index)
+        return tmp_path
+
+    def test_selection_keeps_only_requested_variables(self, synthetic_run):
+        dataset = open_ctsm_hist(
+            "KONZ", output_root=synthetic_run, variables=["GPP"]
+        )
+        assert "GPP" in dataset.data_vars
+        assert "TSOI" not in dataset.data_vars
+        assert "FSH" not in dataset.data_vars
+
+    def test_selection_retains_the_time_axis(self, synthetic_run):
+        """Losing time to a variable filter is never what the caller meant."""
+        dataset = open_ctsm_hist(
+            "KONZ", output_root=synthetic_run, variables=["GPP"]
+        )
+        assert dataset.sizes["time"] > 0
+        assert {"time", "time_bounds", "mcdate", "mcsec"} <= set(dataset.variables)
+
+    def test_a_bare_string_selects_that_one_variable(self, synthetic_run):
+        """`variables="GPP"` must not be read as the characters G and P."""
+        dataset = open_ctsm_hist("KONZ", output_root=synthetic_run, variables="GPP")
+        assert "GPP" in dataset.data_vars
+        assert "TSOI" not in dataset.data_vars
+
+    def test_no_selection_returns_everything(self, synthetic_run):
+        dataset = open_ctsm_hist("KONZ", output_root=synthetic_run)
+        assert {"GPP", "TSOI", "FSH"} <= set(dataset.data_vars)
+
+    def test_unknown_requested_variable_raises(self, synthetic_run):
+        """A typo must not come back as a dataset with a time axis and no data."""
+        with pytest.raises(KeyError, match="NOT_A_VAR"):
+            open_ctsm_hist("KONZ", output_root=synthetic_run, variables=["NOT_A_VAR"])
+        # ... even when it travels with a valid name
+        with pytest.raises(KeyError, match="NOT_A_VAR"):
+            open_ctsm_hist("KONZ", output_root=synthetic_run, variables=["GPP", "NOT_A_VAR"])
+
+
+@pytest.mark.tier0
+class TestMonthLabels:
+    """The monthly stream carries the month it belongs to, read from the filename.
+
+    CTSM stamps h0a.2018-07.nc with mcdate 20180801, so any index built from
+    mcdate is a month late. The label has to travel with the data through
+    combine="by_coords", not be zipped on from a separately sorted file list.
+    """
+
+    @pytest.fixture
+    def monthly_run(self, tmp_path):
+        # Written out of calendar order on purpose: the label must follow the
+        # data, whatever order the files were listed or opened in.
+        for day_index, stamp in ((1, "2018-02"), (0, "2018-01"), (2, "2018-03")):
+            write_history_file(tmp_path, "KONZ", stamp, ["GPP"], stream="h0a",
+                               day_index=day_index, n_steps=1)
+        return tmp_path
+
+    def test_month_coordinate_follows_the_data(self, monthly_run):
+        dataset = open_ctsm_hist("KONZ", output_root=monthly_run, stream="monthly", variables=["GPP"])
+        assert list(dataset["month"].values) == ["2018-01", "2018-02", "2018-03"]
+        # value written into each file was its day_index, so the pairing is checkable
+        assert list(dataset["GPP"].values) == [0.0, 1.0, 2.0]
+
+    def test_month_coordinate_present_without_a_selection(self, monthly_run):
+        dataset = open_ctsm_hist("KONZ", output_root=monthly_run, stream="monthly")
+        assert "month" in dataset.coords
+
+    def test_daily_stream_has_no_month_coordinate(self, tmp_path):
+        write_history_file(tmp_path, "KONZ", "2018-01-01-01800", ["GPP"])
+        dataset = open_ctsm_hist("KONZ", output_root=tmp_path)
+        assert "month" not in dataset.coords
+
+
+@pytest.mark.tier0
+class TestS3VariableSelection:
+    """`variables` must mean the same thing whichever source resolves.
+
+    The S3 boundary is mocked at the three calls the reader makes -- key
+    listing, storage options, and file opening -- so the branch runs without
+    credentials or a network.
+    """
+
+    @pytest.fixture
+    def mocked_s3(self, tmp_path, monkeypatch):
+        # scipy is the S3 engine and reads only NetCDF-3, so write classic files
+        paths = [
+            write_history_file(tmp_path, "KONZ", stamp, ["GPP", "TSOI"], stream="h1",
+                               day_index=i, netcdf_format="NETCDF3_CLASSIC")
+            for i, stamp in enumerate(("2018-01-01-00000", "2018-01-02-00000"))
+        ]
+        keys = [f"archive_1/KONZ.transient/lnd/hist/{p.name}" for p in paths]
+        by_key = dict(zip(keys, paths))
+
+        class _Opener:
+            def __init__(self, uri):
+                self.path = by_key[uri.split("/", 3)[3]]
+
+            def open(self):
+                return open(self.path, "rb")
+
+        monkeypatch.setattr(data_access, "list_objects_under_prefix", lambda s3, bucket, prefix: keys)
+        monkeypatch.setattr(data_access, "get_storage_options", lambda endpoint_url=None: {})
+        monkeypatch.setattr(data_access.fsspec, "open_files", lambda uris, mode, **kw: [_Opener(u) for u in uris])
+        monkeypatch.setenv("CTSM_DATA_SOURCE", "s3")
+        monkeypatch.setattr(data_access, "get_s3_client", lambda *a, **k: object())
+        return tmp_path
+
+    def test_s3_path_accepts_and_applies_variables(self, mocked_s3):
+        dataset = open_ctsm_hist("KONZ", 2018, variables=["GPP"])
+        assert "GPP" in dataset.data_vars
+        assert "TSOI" not in dataset.data_vars
+        assert {"time", "mcdate"} <= set(dataset.variables)
+
+    def test_s3_path_raises_on_unknown_variable(self, mocked_s3):
+        with pytest.raises(KeyError, match="NOT_A_VAR"):
+            open_ctsm_hist("KONZ", 2018, variables=["NOT_A_VAR"])
