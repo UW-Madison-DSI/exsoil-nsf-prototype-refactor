@@ -160,6 +160,30 @@ float time(time) ;
 Also present: `mcdate` (int `YYYYMMDD`), `mcsec` (seconds of day),
 `time_bounds(time, nbnd)`. Files are NetCDF; open with xarray.
 
+> ### ⚠️ Monthly files are stamped at the start of the *next* month
+> `KONZ.transient.clm2.h0a.2018-07.nc` holds July's average, but its `mcdate`
+> is **`20180801`**. The filename carries the month the data belongs to;
+> `mcdate` does not.
+>
+> Building a month index from `mcdate` shifts the whole series forward by one
+> month. It is easy to miss because the result still looks like a plausible
+> seasonal cycle, just displaced. Measured against KONZ observations it drops
+> the correlation from **0.872 to 0.767** and loses a month at the series
+> boundary.
+>
+> `open_ctsm_hist(site, stream="monthly")` reads the month from each filename
+> and attaches it as a `month` coordinate (`YYYY-MM`) along `time`, so the
+> label travels with the values through `combine="by_coords"`:
+>
+> ```python
+> monthly = open_ctsm_hist(site, stream="monthly", variables=["GPP"])
+> index = pd.PeriodIndex(monthly["month"].values, freq="M")
+> ```
+>
+> Build month indexes from that coordinate, never from `mcdate`. The daily
+> stream is not affected -- its filenames and `mcdate` agree -- and carries no
+> `month` coordinate.
+
 **Engine — resolved in Phase 1, and not what this document originally
 guessed.** Live output is **CDF-5** (magic bytes `CDF\x05`), verified on disk;
 the reference copies are CDF-2 (`CDF\x02`). `scipy` reads CDF-1/2 only, so it
