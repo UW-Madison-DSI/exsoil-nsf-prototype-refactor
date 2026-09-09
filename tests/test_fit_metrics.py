@@ -8,10 +8,12 @@ on values, not on "it returned a number".
 """
 
 import math
+import warnings
 
 import numpy as np
 import pandas as pd
 import pytest
+import xarray as xr
 
 from analytics_modules.fit_metrics import (
     evaluate_fit,
@@ -31,7 +33,7 @@ def monthly_index(years: int, start: str = "2018-01-01") -> pd.DatetimeIndex:
 
 
 def seasonal(index: pd.DatetimeIndex, peak_month: int = 7, amplitude: float = 1.0,
-             year_anomaly=None) -> pd.Series:
+             year_anomaly: dict | None = None) -> pd.Series:
     """A clean annual cycle peaking in `peak_month`, optionally with per-year offsets."""
     phase = 2 * np.pi * (index.month - peak_month) / 12
     values = 5.0 + amplitude * np.cos(phase)
@@ -109,14 +111,27 @@ class TestInterannualVariability:
         assert evaluate_series(short, short)["n_years"] == 3
         assert evaluate_series(long, long)["short_record"] is False
 
+    def test_short_record_counts_months_of_data_not_years_touched(self):
+        """The flag is about how much data there is, not which calendars it spans.
+
+        26 months that happen to touch four calendar years hold two years of
+        data and must be flagged; 48 months over four full years must not.
+        """
+        touches_four = pd.date_range("2018-12-01", periods=26, freq="MS")
+        m = evaluate_series(seasonal(touches_four), seasonal(touches_four))
+        assert m["n_years"] == 4
+        assert m["short_record"] is True
+        full_four = monthly_index(4)
+        assert evaluate_series(seasonal(full_four), seasonal(full_four))["short_record"] is False
+
     def test_neon_window_is_a_short_record(self):
-        """45 months, 2018-01 to 2021-09: four calendar years touched, so not flagged,
-        but the last is partial. The flag is about years, the caller reads n."""
+        """45 months, 2018-01 to 2021-09, the case the flag was written for."""
         idx = pd.date_range("2018-01-01", periods=45, freq="MS")
         m = evaluate_series(seasonal(idx), seasonal(idx))
         assert m["n"] == 45
-        assert m["n_years"] == 4
-        assert m["short_record"] is False
+        assert m["n_months"] == 45
+        assert m["short_record"] is True
+        assert "indicative at best" in summarize_fit(m)
 
 
 class TestResolution:
@@ -148,6 +163,70 @@ class TestResolution:
         obs_period.index = obs_period.index.to_period("M")
         assert evaluate_series(obs_period, obs_period)["n"] == 48
 
+    def test_daily_model_against_monthly_observations_is_averaged_first(self):
+        """The ET pairing: daily h1 model, monthly tower observations.
+
+        Without this the model is sampled on whichever days land on the
+        observation stamps and the result is labelled a clean monthly score.
+        A perfect model must score perfectly.
+        """
+        idx = pd.date_range("2018-01-01", "2021-09-30", freq="D")
+        rng = np.random.default_rng(3)
+        sim = pd.Series(5 + np.cos(2 * np.pi * (idx.dayofyear - 200) / 365) + rng.normal(0, 0.5, len(idx)), index=idx)
+        obs = sim.resample("MS").mean()
+        with pytest.warns(UserWarning, match="averaging the sim series to monthly"):
+            m = evaluate_series(obs, sim)
+        assert m["resolution"] == "monthly"
+        assert m["resampled"] == "sim"
+        assert m["n"] == 45
+        assert m["R2"] == pytest.approx(1.0)
+        assert m["RMSE"] == pytest.approx(0.0, abs=1e-12)
+        assert "averaged to monthly" in summarize_fit(m)
+
+    def test_same_cadence_does_not_warn(self):
+        idx = monthly_index(4)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            m = evaluate_series(seasonal(idx), seasonal(idx))
+        assert m["resampled"] is None
+
+
+class TestMonthlyTimestamps:
+    """CTSM's monthly `time` is stamped at the start of the *next* month (data contract)."""
+
+    def test_mid_month_observation_stamps_align_with_month_start_model(self):
+        idx = monthly_index(4)
+        obs = seasonal(idx)
+        obs_mid = obs.copy()
+        obs_mid.index = obs_mid.index + pd.Timedelta(days=14)
+        m = evaluate_series(obs_mid, obs)
+        assert m["n"] == 48
+        assert m["seasonal_phase_shift_months"] == 0
+
+    def test_dataarray_with_month_coordinate_is_placed_by_it_not_by_time(self):
+        """A perfect model read via the reader's `month` coordinate must score perfectly,
+        even though its raw `time` says the following month."""
+        idx = monthly_index(4)
+        obs = seasonal(idx)
+        next_month_stamps = idx + pd.DateOffset(months=1)          # what CTSM writes
+        model = xr.DataArray(
+            obs.to_numpy().reshape(-1, 1),
+            dims=("time", "lndgrid"),
+            coords={"time": next_month_stamps, "month": ("time", idx.strftime("%Y-%m").to_numpy())},
+        )
+        m = evaluate_series(obs, model)
+        assert m["n"] == 48
+        assert m["seasonal_phase_shift_months"] == 0
+        assert m["R2"] == pytest.approx(1.0)
+
+    def test_dataarray_without_month_coordinate_uses_time_and_shows_the_trap(self):
+        """Documented, not fixed: raw `time` on the monthly stream is a month late."""
+        idx = monthly_index(4)
+        obs = seasonal(idx)
+        model = xr.DataArray(obs.to_numpy(), dims=("time",), coords={"time": idx + pd.DateOffset(months=1)})
+        m = evaluate_series(obs, model)
+        assert m["seasonal_phase_shift_months"] == 1
+
 
 class TestVariableAgnostic:
     def test_negative_values_pass_through_unaltered(self):
@@ -164,6 +243,46 @@ class TestVariableAgnostic:
         obs = seasonal(idx)
         sim = seasonal(idx)[6:]            # model starts six months late
         assert evaluate_series(obs, sim)["n"] == 42
+
+    def test_positional_index_is_refused_not_guessed(self):
+        frame = pd.DataFrame({"a": np.arange(48.0), "b": np.arange(48.0) + 0.2})
+        with pytest.raises(TypeError, match="time index is required"):
+            evaluate_fit(frame, "a", "b")
+        with pytest.raises(TypeError):
+            evaluate_series(frame["a"].to_numpy(), frame["b"].to_numpy(), index=frame.index)
+
+    def test_time_on_the_index_is_used_when_there_is_no_time_column(self):
+        """monthly_observed_gpp returns month on the index, not in a column."""
+        idx = monthly_index(4)
+        frame = pd.DataFrame({"gpp": seasonal(idx).to_numpy(), "model": seasonal(idx).to_numpy()}, index=idx)
+        assert evaluate_fit(frame, "gpp", "model")["n"] == 48
+
+    def test_no_shared_timestamps_is_an_error_not_a_row_of_nan(self):
+        obs = seasonal(monthly_index(2, "2018-01-01"))
+        sim = seasonal(monthly_index(2, "2022-01-01"))
+        with pytest.raises(ValueError, match="no shared timestamps"):
+            evaluate_series(obs, sim)
+
+    def test_all_nan_simulation_is_an_error(self):
+        idx = monthly_index(2)
+        frame = pd.DataFrame({"time": idx, "obs": seasonal(idx).to_numpy(), "sim": np.nan})
+        with pytest.raises(ValueError):
+            evaluate_fit(frame, "obs", "sim")
+        with pytest.raises(ValueError):
+            compute_fit(frame, "obs", "sim")
+
+    def test_duplicate_timestamps_are_refused_with_a_reason(self):
+        """Depth-resolved H2OSOI has many rows per timestamp; averaging them must be deliberate."""
+        idx = monthly_index(2)
+        obs = pd.concat([seasonal(idx), seasonal(idx)])
+        with pytest.raises(ValueError, match="duplicate timestamp"):
+            evaluate_series(obs, seasonal(idx))
+
+    def test_correlation_needs_three_pairs(self):
+        idx = monthly_index(1)[:2]
+        m = evaluate_series(seasonal(idx), seasonal(idx))
+        assert m["n"] == 2
+        assert math.isnan(m["R2"])
 
     def test_magnitude_keys_match_compute_fit_on_monthly_input(self):
         idx = monthly_index(4)

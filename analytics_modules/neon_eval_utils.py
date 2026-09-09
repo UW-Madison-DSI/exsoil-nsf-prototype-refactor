@@ -5,7 +5,6 @@ from typing import Optional
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 import xarray as xr
 
 #
@@ -166,6 +165,7 @@ from .kalman_filter import (  # noqa: E402,F401
     DegenerateCalibrationWarning,
     kalman_gain_bias,
 )
+from .fit_metrics import evaluate_fit, magnitude_metrics, summarize_fit  # noqa: E402
 
 
 # ---------- Orchestrator ----------
@@ -249,23 +249,16 @@ def calibrate_and_evaluate(df, col, method="auto", hour_col=None):
 
 
 ######################## time series comparison
-from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
-import numpy as np
 
-### something weird here
 def compute_fit(df, obs, sim):
+    """R2, RMSE, MAE and Bias of column `sim` against column `obs`, over rows where both are present.
+
+    A thin wrapper over fit_metrics.magnitude_metrics, so there is one
+    definition of these four numbers. For the seasonal-cycle and interannual
+    scores that say *how* the model misses, use evaluate_fit (issue #18).
+    """
     mask = df[obs].notna() & df[sim].notna()
-    y_true = df.loc[mask, obs]
-    y_pred = df.loc[mask, sim]
-
-    #r2  = r2_score(y_true, y_pred)
-    r = float(np.corrcoef(y_true, y_pred)[0, 1])
-    r2 = r**2
-    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-    mae = mean_absolute_error(y_true, y_pred)
-    bias = np.mean(y_pred - y_true)
-
-    return {"R2": r2, "RMSE": rmse, "MAE": mae, "Bias": bias}
+    return magnitude_metrics(df.loc[mask, obs].to_numpy(float), df.loc[mask, sim].to_numpy(float))
 
 
 def comparison(df, label, var, variables_units):
@@ -289,11 +282,15 @@ def comparison(df, label, var, variables_units):
     df_daily.plot(x="time", y=sim_var,    marker="o", ax=ax, color="r", legend=False)
     df_daily.plot(x="time", y=calib_sim_var,    marker="o", ax=ax, color="g", legend=False)
     
-    fit_sim  = compute_fit(df_daily, var, "sim_"+var)
-    fit_cali = compute_fit(df_daily, var, "cali_sim_"+var)
+    # evaluate_fit scores bias-type metrics on monthly means (decision 005)
+    # and adds the seasonal-cycle and interannual scores (issue #18).
+    fit_sim = evaluate_fit(df_daily, var, "sim_" + var)
+    fit_cali = evaluate_fit(df_daily, var, "cali_sim_" + var)
 
     print("CLM fit:", fit_sim)
+    print("   ", summarize_fit(fit_sim, "CLM"))
     print("KF_CLM fit:", fit_cali)
+    print("   ", summarize_fit(fit_cali, "KF_CLM"))
 
     ax.set_xlabel("Time", fontsize=14)
     ax.set_ylabel(f"{plot_var_desc} [{plot_var_unit}]", fontsize=14)
@@ -327,6 +324,10 @@ def time_series_comparison(df, label, var):
         'H2OSOI': {
             'units':"",
             'var_name': "H2OSOI"
+            },
+        'ET': {
+            'units':"W m$^{-2}$",
+            'var_name': "Evapotranspiration (latent heat, FCTR + FCEV + FGEV)"
             }
         }
     

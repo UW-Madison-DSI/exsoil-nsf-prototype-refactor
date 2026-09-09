@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from analytics_modules.fluxes import ET_COMPONENTS, check_et_closure, derive_et
+from analytics_modules.fluxes import ET_COMPONENTS, ET_VARIABLES, check_et_closure, derive_et
 
 pytestmark = pytest.mark.tier0
 
@@ -47,3 +47,22 @@ def test_closure_failure_is_an_error_not_a_number():
 def test_daily_stream_has_nothing_to_close_against():
     """The daily stream carries no EFLX_LH_TOT; that is a None, not a pass."""
     assert check_et_closure(derive_et(components(with_total=False))) is None
+
+
+def test_monthly_dataset_missing_the_total_is_a_selection_error_not_a_skip():
+    """The reader marks the monthly stream with a `month` coordinate. If the
+    native total is missing there, a `variables` selection dropped it."""
+    monthly = components(with_total=False).assign_coords(month=("time", np.array(["2018-01"] * 6)))
+    with pytest.raises(KeyError, match="ET_VARIABLES"):
+        check_et_closure(derive_et(monthly))
+
+
+def test_all_nan_pairs_return_none_not_a_perfect_closure():
+    dataset = components()
+    for name in ET_COMPONENTS + ("EFLX_LH_TOT",):
+        dataset[name] = dataset[name] * np.nan
+    assert check_et_closure(derive_et(dataset)) is None
+
+
+def test_et_variables_is_what_to_request_on_the_monthly_stream():
+    assert ET_VARIABLES == ("FCTR", "FCEV", "FGEV", "EFLX_LH_TOT")

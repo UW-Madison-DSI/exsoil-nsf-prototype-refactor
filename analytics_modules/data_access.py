@@ -73,6 +73,8 @@ from botocore.exceptions import ClientError
 import fsspec
 import numpy as np
 import xarray as xr
+
+from .fluxes import ET_COMPONENTS, ET_NAME, NATIVE_TOTAL, derive_et
 from glob import glob
 
 
@@ -291,6 +293,9 @@ def open_ctsm_hist_from_s3(
     # Same selection as the local reader, so open_ctsm_hist(variables=...)
     # means one thing regardless of which source resolves.
     variables = _as_variable_list(variables)
+    to_derive = []
+    if variables is not None:
+        variables, to_derive = _expand_derived(variables)
     preprocess = _select_variables(variables) if variables is not None else None
 
     start = time.time()
@@ -315,7 +320,7 @@ def open_ctsm_hist_from_s3(
     print(f"Reading all simulation files took: {time.time() - start:.2f} seconds.")
     if variables is not None:
         _check_requested_variables(ds_ctsm, variables)
-    return ds_ctsm
+    return _apply_derived(ds_ctsm, to_derive)
 
 
 # ============================================================
@@ -325,6 +330,14 @@ def open_ctsm_hist_from_s3(
 # Kept regardless of a `variables` selection: dropping the time axis to a
 # variable filter is never what the caller meant.
 TIME_BOOKKEEPING = frozenset({"time", "time_bounds", "mcdate", "mcsec"})
+
+# Variables that are not in the files but can be built from ones that are.
+# Requesting the name pulls in its inputs and applies the derivation after the
+# open, so `variables=["ET"]` works on either stream. The native monthly total
+# is pulled in too when present, so the closure check has something to check.
+DERIVED_VARIABLES = {
+    ET_NAME: {"inputs": ET_COMPONENTS, "optional": (NATIVE_TOTAL,), "derive": derive_et},
+}
 
 # CTSM stamps a monthly file at the start of the *next* month: h0a.2018-07.nc
 # holds July but reports mcdate 20180801. The filename is the only place the
@@ -440,6 +453,26 @@ def _as_variable_list(variables):
     return list(variables)
 
 
+def _expand_derived(variables):
+    """Replace derived names with the file variables they need. Returns (to_read, to_derive)."""
+    to_read, to_derive = [], []
+    for name in variables:
+        spec = DERIVED_VARIABLES.get(name)
+        if spec is None:
+            to_read.append(name)
+        else:
+            to_derive.append(name)
+            to_read.extend(spec["inputs"])
+            to_read.extend(spec["optional"])
+    return list(dict.fromkeys(to_read)), to_derive
+
+
+def _apply_derived(dataset, to_derive):
+    for name in to_derive:
+        dataset = DERIVED_VARIABLES[name]["derive"](dataset)
+    return dataset
+
+
 def _select_variables(variables):
     """Build an open_mfdataset preprocess that keeps `variables` plus time bookkeeping."""
     keep = set(variables) | TIME_BOOKKEEPING
@@ -458,7 +491,8 @@ def _check_requested_variables(dataset, variables) -> None:
     than as a typo. That is the silent-empty failure this module exists to
     prevent, so it is an error.
     """
-    missing = sorted(set(variables) - set(dataset.variables))
+    optional = {name for spec in DERIVED_VARIABLES.values() for name in spec["optional"]}
+    missing = sorted(set(variables) - set(dataset.variables) - optional)
     if missing:
         raise KeyError(
             f"Requested variables not present in the history files: {missing}. "
@@ -524,6 +558,8 @@ def open_ctsm_hist_local(
         stream: "daily" (h1a/h1) or "monthly" (h0a/h0).
         input_label: Case label, normally "transient".
         variables: Keep only these, discarding the rest as each file opens.
+            Derived names are accepted: "ET" reads FCTR, FCEV and FGEV (and
+            EFLX_LH_TOT where the stream has it) and adds their sum.
             Worth using on the monthly stream, which carries 623 variables per
             file: selecting three takes ~10 s where reading everything takes
             ~117 s. Time bookkeeping (time, time_bounds, mcdate, mcsec) is
@@ -550,6 +586,9 @@ def open_ctsm_hist_local(
     print(f"All Simulation files: [{len(sim_files)} files]")
 
     variables = _as_variable_list(variables)
+    to_derive = []
+    if variables is not None:
+        variables, to_derive = _expand_derived(variables)
     steps = []
     if variables is not None:
         steps.append(_select_variables(variables))
@@ -580,7 +619,7 @@ def open_ctsm_hist_local(
     print(f"Reading all simulation files took: {time.time() - start:.2f} seconds.")
     if variables is not None:
         _check_requested_variables(ds_ctsm, variables)
-    return ds_ctsm
+    return _apply_derived(ds_ctsm, to_derive)
 
 
 def resolve_source(source=None) -> str:

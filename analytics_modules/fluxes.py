@@ -27,6 +27,15 @@ import xarray as xr
 ET_COMPONENTS = ("FCTR", "FCEV", "FGEV")
 ET_NAME = "ET"
 NATIVE_TOTAL = "EFLX_LH_TOT"
+# What to request from open_ctsm_hist(variables=...) on the monthly stream so
+# that derive_et and check_et_closure both have what they need. On the daily
+# stream the native total does not exist and is reported missing; request
+# ET_COMPONENTS there, or simply request "ET" and let the reader expand it.
+ET_VARIABLES = ET_COMPONENTS + (NATIVE_TOTAL,)
+# The monthly reader attaches this coordinate; its presence says "this is the
+# monthly stream", which is how a missing native total is told apart from a
+# daily file that never had one.
+MONTHLY_MARKER = "month"
 
 
 def derive_et(dataset: xr.Dataset) -> xr.Dataset:
@@ -51,22 +60,36 @@ def derive_et(dataset: xr.Dataset) -> xr.Dataset:
 def check_et_closure(dataset: xr.Dataset, rtol: float = 1e-4, atol: float = 1e-3) -> float | None:
     """Compare derived ET with CLM's own `EFLX_LH_TOT` where the file carries it.
 
-    Returns the largest absolute difference found, or None when the native
-    total is absent (the daily stream), in which case there is nothing to
-    check against. Raises AssertionError on a mismatch, since a derivation
-    that disagrees with the model's own bookkeeping is a bug, not a result.
+    Returns the largest absolute difference found, or None when there is
+    nothing to compare: the native total is absent because this is the daily
+    stream, or no timestep has both values finite. Raises AssertionError on a
+    mismatch, since a derivation that disagrees with the model's own
+    bookkeeping is a bug, not a result.
+
+    Raises KeyError when the dataset is the monthly stream (it carries the
+    reader's `month` coordinate) but the native total is missing: that means
+    it was filtered out by a `variables` selection, and silently skipping the
+    check would leave a component-sum error uncaught on the one stream that
+    can catch it. Open with `variables=ET_VARIABLES` or `variables=["ET"]`.
     """
     if NATIVE_TOTAL not in dataset:
+        if MONTHLY_MARKER in dataset.coords:
+            raise KeyError(
+                f"{NATIVE_TOTAL} is not in this monthly dataset, so it was dropped by a variable "
+                f"selection. Open with variables=ET_VARIABLES (or variables=['ET']) to keep it."
+            )
         return None
     if ET_NAME not in dataset:
         dataset = derive_et(dataset)
     derived = dataset[ET_NAME].values
     native = dataset[NATIVE_TOTAL].values
     finite = np.isfinite(derived) & np.isfinite(native)
+    if not finite.any():
+        return None
+    gap = np.abs(derived[finite] - native[finite])
     if not np.allclose(derived[finite], native[finite], rtol=rtol, atol=atol):
-        worst = float(np.nanmax(np.abs(derived[finite] - native[finite])))
         raise AssertionError(
-            f"Derived ET disagrees with {NATIVE_TOTAL} by up to {worst:.4g} W/m^2; "
+            f"Derived ET disagrees with {NATIVE_TOTAL} by up to {float(gap.max()):.4g} W/m^2; "
             "the components do not sum to the model's own total."
         )
-    return float(np.nanmax(np.abs(derived[finite] - native[finite]))) if finite.any() else 0.0
+    return float(gap.max())
