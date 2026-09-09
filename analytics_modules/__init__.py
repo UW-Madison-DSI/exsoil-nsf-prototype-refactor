@@ -6,7 +6,10 @@ without needing to know which submodule defines what.
 
 The Kalman filter is defined once, in kalman_filter.py; neon_eval_utils
 re-exports it, so both import paths are the same function. Before #29 it
-was forked into both files, and a fix could land in one copy only.
+was forked into both files, and a fix could land in one copy only. The
+old scalar `kalman_filter` function is gone (#31, #32): it had no callers,
+swapped observations and simulations, and its re-export shadowed the
+`kalman_filter` submodule on the package.
 
 Each submodule is imported defensively so a missing function in one
 optional module doesn't break notebooks that only use a different one.
@@ -20,7 +23,6 @@ from .neon_eval_utils import (
     time_series_comparison,
     residuals_plots,
     calibrate_and_evaluate,
-    kalman_filter,
     kalman_gain_bias,
     DegenerateCalibrationError,
     DegenerateCalibrationWarning,

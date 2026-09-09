@@ -19,7 +19,7 @@ data or a container.
 """
 
 import functools
-import importlib
+import types
 import warnings
 
 import matplotlib
@@ -30,12 +30,8 @@ import pytest
 matplotlib.use("Agg")
 
 import analytics_modules  # noqa: E402
+from analytics_modules import kalman_filter as kf_module  # noqa: E402
 from analytics_modules import neon_eval_utils  # noqa: E402
-
-# `analytics_modules.kalman_filter` is the *function* once the package is
-# imported (the re-export shadows the submodule name), so fetch the module
-# itself through importlib.
-kf_module = importlib.import_module("analytics_modules.kalman_filter")
 from analytics_modules.kalman_filter import (  # noqa: E402
     DegenerateCalibrationError,
     DegenerateCalibrationWarning,
@@ -125,10 +121,31 @@ class TestDegeneracyIsReportedAsFailure:
         obs, sim = monthly_gpp_in_gc()
         with pytest.warns(DegenerateCalibrationWarning, match="ignoring the model"):
             y_cal, _, _, info = kalman_gain_bias(obs, sim, scale=1.0)
-        # this is the trap: the fit statistic is perfect and the gain is dead
+        # this is the trap: the posterior fit is perfect because the bias
+        # random walk jumped to each observation as it arrived ...
         assert r_squared(obs, y_cal) > 0.999
-        assert abs(info["gain_median"]) < 0.05
+        assert info["bias_absorption"] > 0.95
+        # ... while the prediction learned nothing it could use
+        assert r_squared(obs, info["y_pred"]) < 0.999
         assert info["degenerate"] is True
+
+    def test_gain_at_its_prior_does_not_hide_absorption(self):
+        """The #29 signature was 'gain dead at zero', but that was the zero prior.
+
+        With the filter starting from gain 1, a misconfigured Q leaves the gain
+        sitting at 1 while the bias term still swallows every observation. The
+        absorption test is what catches this; the gain test cannot.
+        """
+        obs, sim = monthly_gpp_in_gc()
+        with pytest.warns(DegenerateCalibrationWarning, match="absorbs"):
+            _, _, _, info = kalman_gain_bias(obs, sim, scale=1.0)
+        assert abs(info["gain_standardised"]) >= 0.05  # the gain test alone would pass this
+        assert info["bias_absorption"] > 0.95
+
+    def test_well_scaled_filter_absorbs_only_part_of_the_residual(self):
+        obs, sim = monthly_gpp_in_gc()
+        _, _, _, info = kalman_gain_bias(obs, sim)
+        assert 0.0 < info["bias_absorption"] < 0.95
 
     def test_mixed_units_are_flagged_not_fitted(self):
         """The Modeling_Hub cell-12 trap: observations in umol beside a model in gC.
@@ -184,6 +201,62 @@ class TestDegeneracyIsReportedAsFailure:
         assert summary["post_metrics"]["rmse"] < summary["pre_metrics"]["rmse"]
 
 
+class TestOneStepAhead:
+    """Issue #34: the fit that gets reported must not have seen the answer.
+
+    ``y_cal`` is the posterior, which has assimilated the observation it is
+    then compared with. ``info["y_pred"]`` is the one-step-ahead prediction,
+    which has not. Only the second is an honest score.
+    """
+
+    def test_prediction_uses_only_earlier_observations(self):
+        obs, sim = monthly_gpp_in_gc()
+        _, _, _, info = kalman_gain_bias(obs, sim, smooth=False)
+        theta = info["theta_seq"]
+        # y_pred[t] must be H[t] . theta[t-1], reconstructed independently here
+        expected = theta[:-1, 0] + theta[:-1, 1] * sim[1:]
+        np.testing.assert_allclose(info["y_pred"][1:], expected, rtol=1e-9, atol=1e-18)
+
+    def test_first_prediction_is_the_uncorrected_model(self):
+        """The prior is bias 0, gain 1, so step 0 predicts the model itself."""
+        obs, sim = monthly_gpp_in_gc()
+        _, _, _, info = kalman_gain_bias(obs, sim)
+        assert info["y_pred"][0] == pytest.approx(sim[0], rel=1e-9)
+
+    def test_posterior_is_never_worse_than_prediction_in_sample(self):
+        obs, sim = monthly_gpp_in_gc()
+        y_cal, _, _, info = kalman_gain_bias(obs, sim)
+        r2_posterior = r_squared(obs, y_cal)
+        r2_prediction = r_squared(obs, info["y_pred"])
+        # the posterior has seen the answer; it must look at least as good
+        assert r2_prediction <= r2_posterior
+        # and the gap is real, not rounding: this is the optimism #34 is about
+        assert r2_posterior - r2_prediction > 0.01
+
+    def test_prediction_scales_with_the_units(self):
+        obs, sim = monthly_gpp_in_gc()
+        _, _, _, info_gc = kalman_gain_bias(obs, sim)
+        _, _, _, info_umol = kalman_gain_bias(obs * UMOL_PER_GC, sim * UMOL_PER_GC)
+        np.testing.assert_allclose(info_gc["y_pred"] * UMOL_PER_GC, info_umol["y_pred"], rtol=1e-9)
+
+    def test_orchestrator_scores_the_prediction_not_the_posterior(self):
+        obs, sim = monthly_gpp_in_gc()
+        frame = pd.DataFrame({"GPP": obs, "sim_GPP": sim})
+        calibrated, summary = neon_eval_utils.calibrate_and_evaluate(frame, "GPP")
+        _, _, _, info = kalman_gain_bias(obs, sim)
+        # the column consumers plot and score is the one-step-ahead series
+        np.testing.assert_allclose(calibrated["cali_sim_GPP"].to_numpy(), info["y_pred"], rtol=1e-9)
+        # the reported post metric is computed on it, not on the posterior
+        rmse_pred = float(np.sqrt(np.mean((obs - info["y_pred"]) ** 2)))
+        assert summary["post_metrics"]["rmse"] == pytest.approx(rmse_pred, rel=1e-9)
+        # the posterior is still available, but labelled as what it is
+        assert "cali_sim_GPP_posterior" in calibrated
+        assert summary["posterior_metrics"]["rmse"] <= summary["post_metrics"]["rmse"]
+        # the predictive interval brackets the prediction, not the posterior
+        assert np.all(calibrated["cal_lo"] <= calibrated["cali_sim_GPP"])
+        assert np.all(calibrated["cali_sim_GPP"] <= calibrated["cal_hi"])
+
+
 class TestEdgeCases:
     def test_constant_observations_scale_by_the_model_and_are_degenerate(self):
         """std(obs) = 0 must not send the filter back to raw units.
@@ -232,7 +305,6 @@ class TestSingleImplementation:
     def test_every_import_path_is_the_same_object(self):
         assert kf_module.kalman_gain_bias is neon_eval_utils.kalman_gain_bias
         assert kf_module.kalman_gain_bias is analytics_modules.kalman_gain_bias
-        assert kf_module.kalman_filter is neon_eval_utils.kalman_filter
 
     def test_neon_eval_utils_no_longer_defines_its_own_copy(self):
         import inspect
@@ -240,3 +312,10 @@ class TestSingleImplementation:
         source = inspect.getsource(neon_eval_utils)
         assert "def kalman_gain_bias" not in source
         assert "def kalman_filter" not in source
+
+    def test_submodule_is_reachable_by_its_name(self):
+        """Issues #31 and #32: the scalar filter and its shadowing re-export are gone."""
+        assert isinstance(analytics_modules.kalman_filter, types.ModuleType)
+        assert analytics_modules.kalman_filter is kf_module
+        assert not hasattr(kf_module, "kalman_filter")
+        assert not hasattr(neon_eval_utils, "kalman_filter")
