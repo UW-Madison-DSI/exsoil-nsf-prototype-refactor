@@ -20,41 +20,6 @@ class DegenerateCalibrationError(ValueError):
     """Raised by orchestrators when a calibration is degenerate and its metrics would mislead."""
 
 
-def kalman_filter(df, var):
-    """Simple scalar Kalman filter merging model predictions with observations."""
-
-    df_clean = df.dropna(subset=[var, 'sim_' + var])
-
-    sim = df_clean[var]
-    obs = df_clean['sim_' + var]
-    x_est = sim.iloc[0]
-    P = 1.0
-    Q = 1e-3
-    R = 0.1 * np.var(obs - sim)
-
-    kalman_estimates = []
-
-    for i in range(len(obs)):
-        z = obs.iloc[i]
-        x_pred = sim.iloc[i]
-
-        P_pred = P + Q
-        K = P_pred / (P_pred + R)
-        x_est = x_pred + K * (z - x_pred)
-        P = (1 - K) * P_pred
-
-        kalman_estimates.append(x_est)
-
-    kalman_estimates = np.array(kalman_estimates)
-    bias = np.mean(kalman_estimates - obs)
-    kalman_corrected = kalman_estimates - bias
-
-    df_clean["kalman_" + var] = kalman_estimates
-    df_clean["kalman_" + var + "_bias_corrected"] = kalman_corrected
-
-    return df_clean
-
-
 def kalman_gain_bias(
     y_obs,
     y_sim,
@@ -64,6 +29,7 @@ def kalman_gain_bias(
     smooth=True,
     scale: float | None = None,
     gain_floor: float = 0.05,
+    absorption_ceiling: float = 0.95,
 ):
     """
     Linear state-space with predictor vector h_t = [1, sim_t, sin(wt), cos(wt)] (last two optional).
@@ -85,16 +51,42 @@ def kalman_gain_bias(
     back before they are returned.
 
     A filter that is ignoring the model is reported as ``info["degenerate"]``
-    and a ``DegenerateCalibrationWarning``, never as a good fit. The test is
-    on the *standardised* gain, the median learned gain times
-    ``std(sim) / std(obs)``: the fraction of the observed variability that
-    reaches the output through the model path. A raw gain of 0.03 is
-    legitimate when the model's amplitude is 30x the observations', so the
-    raw gain is not compared with ``gain_floor``; the standardised gain is.
+    and a ``DegenerateCalibrationWarning``, never as a good fit. Two tests,
+    either of which flags it:
+
+    - The *standardised* gain, the median learned gain times
+      ``std(sim) / std(obs)``, is below ``gain_floor``. That is the fraction
+      of the observed variability reaching the output through the model
+      path. A raw gain of 0.03 is legitimate when the model's amplitude is
+      30x the observations', so the raw gain is not what is compared.
+    - The *bias absorption*, ``1 - SS(y - y_cal) / SS(y - y_pred)``, exceeds
+      ``absorption_ceiling``. When the process noise is far larger than the
+      signal, the bias random walk jumps to each observation as it arrives:
+      the posterior reproduces the data exactly while the one-step-ahead
+      prediction learns nothing. That is the #29 failure, and it is what
+      the posterior R^2 of 1.0 was measuring. With a well-scaled Q the
+      posterior absorbs a modest share of the prediction residual, not
+      nearly all of it.
+
+    Three calibrated series come back, and they are not interchangeable:
+
+    - ``info["y_pred"]`` is the **one-step-ahead prediction**,
+      ``H[t] . theta_{t-1}``: the calibrated model at ``t`` using only
+      observations before ``t``. This is the series to score against the
+      observations. The first value uses the prior, which starts from the
+      uncorrected model (bias 0, gain 1), so ``y_pred[0] == y_sim[0]``.
+    - ``y_cal`` is the **posterior fit**, ``H[t] . theta_t``, which has already
+      assimilated ``y[t]``. It is in-sample: scoring it against the
+      observations overstates the fit, because each value has seen the
+      answer (issue #34).
+    - ``y_smooth`` is the RTS-smoothed fit, two-sided and therefore also
+      in-sample.
 
     Returns ``y_cal, (lo, hi), y_smooth, info`` where ``info`` carries
-    ``theta_seq``, ``innov``, ``S``, ``scale``, ``gain_median``,
-    ``gain_standardised``, ``gain_final`` and ``degenerate``.
+    ``y_pred``, ``theta_seq``, ``innov``, ``S`` (the one-step-ahead predictive
+    variance, in y units squared), ``scale``, ``gain_median``,
+    ``gain_standardised``, ``gain_final``, ``bias_absorption`` and
+    ``degenerate``.
     """
     y_obs, y_sim = np.asarray(y_obs, float), np.asarray(y_sim, float)
     m = np.isfinite(y_obs) & np.isfinite(y_sim)
@@ -125,7 +117,11 @@ def kalman_gain_bias(
         Q = np.diag([Q_diag[0], Q_diag[1]])
     dim = H.shape[1]
 
+    # Prior: the uncorrected model. Bias 0, gain 1, no harmonic correction.
+    # A zero prior would make the first one-step-ahead prediction 0, an
+    # artefact that would have to be discarded before scoring.
     theta = np.zeros(dim)
+    theta[1] = 1.0
     P = np.eye(dim)
     R = R0_scale * np.var(y - s) if np.isfinite(np.var(y - s)) else 1.0
     R = max(R, 1e-8)
@@ -156,6 +152,8 @@ def kalman_gain_bias(
         R = 0.95 * R + 0.05 * R_est
 
     y_cal = np.sum(H * theta_f, axis=1)
+    # innov = y - H . theta_pred, so the one-step-ahead prediction falls out
+    y_pred = y - innov
     half_width = 1.96 * np.sqrt(np.maximum(np.sum((H ** 2) * P_f, axis=1), 1e-12))
     lo = y_cal - half_width
     hi = y_cal + half_width
@@ -183,19 +181,35 @@ def kalman_gain_bias(
     # Constant observations or a constant model leave nothing for the model
     # path to explain, so both count as zero explained variability.
     gain_standardised = gain_median * sim_std / obs_std if obs_std > 0 else 0.0
-    degenerate = bool(n) and abs(gain_standardised) < gain_floor
+
+    ss_pred = float(np.sum((y - y_pred) ** 2))
+    ss_post = float(np.sum((y - y_cal) ** 2))
+    bias_absorption = 1.0 - ss_post / ss_pred if ss_pred > 0 else 0.0
+
+    reasons = []
+    if bool(n) and abs(gain_standardised) < gain_floor:
+        reasons.append(
+            f"standardised gain {gain_standardised:.3g} (median learned gain "
+            f"{gain_median:.3g} x std(sim)/std(obs)) is below {gain_floor}"
+        )
+    if bool(n) and bias_absorption > absorption_ceiling:
+        reasons.append(
+            f"the posterior absorbs {bias_absorption:.4f} of the one-step-ahead "
+            f"residual, above {absorption_ceiling}"
+        )
+    degenerate = bool(reasons)
     if degenerate:
         warnings.warn(
-            f"Kalman calibration is degenerate: standardised gain {gain_standardised:.3g} "
-            f"(median learned gain {gain_median:.3g} x std(sim)/std(obs)) is below "
-            f"{gain_floor}. The filter is ignoring the model and reproducing the "
-            "observations through the bias term, so any post-calibration fit "
-            "statistic is meaningless.",
+            "Kalman calibration is degenerate: " + "; ".join(reasons) + ". The "
+            "filter is ignoring the model and reproducing the observations "
+            "through the bias term, so any post-calibration fit statistic is "
+            "meaningless.",
             DegenerateCalibrationWarning,
             stacklevel=2,
         )
 
     info = {
+        "y_pred": y_pred * scale,
         "theta_seq": theta_out,
         "innov": innov * scale,
         "S": S_hist * scale ** 2,
@@ -203,6 +217,7 @@ def kalman_gain_bias(
         "gain_median": gain_median,
         "gain_standardised": gain_standardised,
         "gain_final": gain_final,
+        "bias_absorption": bias_absorption,
         "degenerate": degenerate,
     }
     return y_cal * scale, (lo * scale, hi * scale), y_smooth, info

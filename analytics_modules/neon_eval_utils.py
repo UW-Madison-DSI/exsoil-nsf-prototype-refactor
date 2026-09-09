@@ -164,20 +164,32 @@ def residuals_plots(
 from .kalman_filter import (  # noqa: E402,F401
     DegenerateCalibrationError,
     DegenerateCalibrationWarning,
-    kalman_filter,
     kalman_gain_bias,
 )
 
 
 # ---------- Orchestrator ----------
 def calibrate_and_evaluate(df, col, method="auto", hour_col=None):
-    '''
-    '''
-    d = df.dropna(subset=[col, "sim_"+col]).copy()
+    """Run the Kalman calibration on `col` against `sim_col` and score before and after.
+
+    The post-calibration metrics are computed on the **one-step-ahead
+    prediction** -- the calibrated model at each step using only earlier
+    observations -- which is the honest measure of what the filter adds. The
+    posterior fit, which has already seen each observation it is compared
+    with, is returned as `cali_sim_{col}_posterior` and scored under
+    `posterior_metrics`, labelled in-sample (issue #34).
+
+    Columns added to the returned frame:
+        cali_sim_{col}            one-step-ahead calibrated model (score this)
+        cal_lo, cal_hi            95% predictive interval around it
+        cali_sim_{col}_posterior  in-sample posterior fit (for plotting only)
+        cal_smooth                RTS-smoothed fit, two-sided, also in-sample
+    """
+    d = df.dropna(subset=[col, "sim_" + col]).copy()
     y_obs = d[col].to_numpy(float)
-    y_sim = d["sim_"+col].to_numpy(float)
+    y_sim = d["sim_" + col].to_numpy(float)
     hours = d[hour_col].to_numpy(int) if (hour_col and hour_col in d) else None
-    
+
     print("--------------------- Observations vs simulations")
     fig, residuals, metrics_pre, conclusion_pre = residuals_plots(
         y_obs,
@@ -188,7 +200,7 @@ def calibrate_and_evaluate(df, col, method="auto", hour_col=None):
     print(conclusion_pre)
     print(metrics_pre)
 
-    print("--------------------- Observations vs KF Assimilation")
+    print("--------------------- Observations vs KF calibration (one-step-ahead)")
     y_cal, (lo, hi), y_smooth, info = kalman_gain_bias(y_obs, y_sim, hours=hours)
     if info["degenerate"]:
         # A near-zero gain means the bias term reproduced the observations on
@@ -196,25 +208,44 @@ def calibrate_and_evaluate(df, col, method="auto", hour_col=None):
         # that says nothing about the model, so refuse rather than print them.
         raise DegenerateCalibrationError(
             f"Kalman calibration of {col!r} is degenerate (standardised gain "
-            f"{info['gain_standardised']:.3g}); the filter ignored the model. Check that "
-            "observations and simulations are in the same units, and see issue #29."
+            f"{info['gain_standardised']:.3g}, bias absorption {info['bias_absorption']:.3f}); "
+            "the filter ignored the model. Check that observations and simulations "
+            "are in the same units, and see issue #29."
         )
-    d["cal_lo"], d["cal_hi"] = lo, hi
+    y_pred = info["y_pred"]
+    pred_half_width = 1.96 * np.sqrt(np.maximum(info["S"], 0.0))
+    d["cali_sim_" + col] = y_pred
+    d["cal_lo"], d["cal_hi"] = y_pred - pred_half_width, y_pred + pred_half_width
+    d["cali_sim_" + col + "_posterior"] = y_cal
     if y_smooth is not None:
         d["cal_smooth"] = y_smooth
     pars = {"kf": "bias+gain" + ("+harmonics" if hours is not None else "")}
 
-    d["cali_sim_"+col] = y_cal
     fig, residuals, metrics_post, conclusion_post = residuals_plots(
         y_obs,
-        d["cali_sim_"+col].to_numpy(float),
+        y_pred,
         bins=40,
         savepath=None,
     )
     print(conclusion_post)
     print(metrics_post)
-    return d, {"pre_metrics": metrics_pre, "post_metrics": metrics_post, "method": method, "params": pars}
 
+    # The posterior fit is reported for reference only. It is in-sample, so it
+    # will always look at least as good as the prediction and usually better.
+    fig_post, _, metrics_posterior, _ = residuals_plots(
+        y_obs, y_cal, bins=40, savepath=None, show=False,
+    )
+    plt.close(fig_post)
+    print("--------------------- Posterior fit (in-sample, for reference only)")
+    print(metrics_posterior)
+
+    return d, {
+        "pre_metrics": metrics_pre,
+        "post_metrics": metrics_post,
+        "posterior_metrics": metrics_posterior,
+        "method": method,
+        "params": pars,
+    }
 
 
 ######################## time series comparison
