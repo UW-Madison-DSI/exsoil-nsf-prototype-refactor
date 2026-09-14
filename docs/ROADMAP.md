@@ -14,7 +14,7 @@ Execution for that phase is planned and tracked separately:
 - Execution tracker: GitHub epic **#11** (phase issues #5-#10, scope decisions #12-#14)
 - Shareable status: [docs/project-summary/hub-integration-progress-report.md](project-summary/hub-integration-progress-report.md)
 
-Last updated: 2026-09-04
+Last updated: 2026-09-14
 
 ---
 
@@ -235,7 +235,7 @@ runs. The NEON tower data is trivial.
 | ~~Review use cases with Jingyi~~ | ~~High~~ | Done. Settled in the July 9 `communication-internal` thread: native/live data, GPP as the Kalman target, 5 sites, 4-step Hub 3 loop. |
 | ~~Full-duration simulation~~ | ~~Medium~~ | Done. Full 2018-2024 KONZ run, 83 monthly files. |
 | ~~Phase 1: rebind data-access layer~~ | ~~High~~ | Done (#6, `430d416`). `open_ctsm_hist()` / `find_ctsm_hist_files()` read local output with no credentials; 15 tests pass against real KONZ and reference data. |
-| **Phase 2: Hub 1 on live output** | High | Issue #7. Repoint `Data_Hub.ipynb` at `open_ctsm_hist()` and drop its eager credential cell. Note `/opt/analytics_modules` shadows the repo on `sys.path`. ~0.5 day. |
+| ~~Phase 2: Hub 1 on live output~~ | ~~High~~ | Done (#7, merged). `Data_Hub.ipynb` reads live output with no credentials. |
 | **Get scope decisions to Jingyi** | High | Issues #12-#14 plus perturbation scope and validation tolerance. #12 blocks Phase 3. |
 | **PR and merge** | Medium | Open PR from `feature/arm64-multiarch-rebuild` to `dev`. 63 commits ahead of `main`, no PR open. |
 | **File ESCOMP GitHub issue** | Low | Report the mpi-serial conflict and data server gap. Draft at `docs/ctsm-issue-draft.md`. |
@@ -251,11 +251,11 @@ epic #11. Summarized here:
 | ~~End-to-end NEON simulation test~~ | ~~High~~ | Done. Full KONZ transient produces valid CLM output. |
 | ~~Observation source discovery~~ | ~~Medium~~ | Done (#12). NCAR/NEON eval files, public and credential-free, 45 monthly files per site covering 2018-01 → 2021-09 for all 5 sites, carrying observed GPP. Ingestion spec (units, cadence, quality flags) written. |
 | ~~Observed-GPP comparison policy~~ | ~~High~~ | Decided (#12). **Compare at monthly resolution.** Negatives are a flux-partitioning artifact affecting 26-36% of half-hourly values; monthly aggregation reduces that to 8%, all dormant-season and within ±0.1 umol/m2/s of zero. See [decision 005](decisions/005-observed-gpp-comparison/). |
-| **NEON observation pipeline** | High | Issue #12. Implement the fetch/read helper replacing the unwritten `download_eval_files`, applying the monthly-comparison decision and the ×12.011e-6 unit conversion. |
+| ~~NEON observation pipeline~~ | ~~High~~ | Done (#12, merged). `analytics_modules/observations.py`; `monthly_observed_gpp` applies the monthly decision and the ×12.011e-6 conversion by default. |
 | **Rescope Phase 3/5 site coverage** | High | **41 of 225 site-months have no GPP at all** (18%). Only KONZ is complete (45/45); ABBY is 28/45. The five-site scope needs revisiting against real coverage. See [decision 005](decisions/005-observed-gpp-comparison/). |
-| **Phase 2: Hub 1 (Data Analysis)** | High | Issue #7. Simplest Hub first, per Maria's recommendation. ~0.5 day. |
-| **Phase 3: Hub 2 (Modeling / Kalman)** | High | Issue #8. Fully unblocked. Jingyi confirmed the current filter ships for the demonstration (#14). **Blocked in practice by #29** — the filter returns R²=1.0 on model-unit GPP because its default process noise is ~73,000x the signal variance. |
-| **Extend the fit metrics** | Medium | Issue #18. Add seasonal-cycle and interannual-variability scoring to `compute_fit`, the genuine gap versus ILAMB. Applies to GPP, `H2OSOI` and ET, daily and monthly. **ET decided 2026-09-04:** derive the total from `FCTR + FCEV + FGEV` at both resolutions and keep the three components alongside the total, so partitioned tower ET can be compared component-wise later. No output-configuration change; the remaining four sites run as-is. See [Goodness-of-fit evaluation](#goodness-of-fit-evaluation) below. |
+| ~~Phase 2: Hub 1 (Data Analysis)~~ | ~~High~~ | Done (#7, merged). |
+| **Phase 3: Hub 2 (Modeling / Kalman)** | High | Issue #8. `Modeling_Hub.ipynb` rewritten and **executed end to end for the first time**: 45 overlapping months at KONZ, no credentials. #29 fixed, so the filter is no longer degenerate. **Result to discuss:** the calibration does not improve the out-of-sample fit — it damps the seasonal swing from 1.45x the observed to 0.43x and lags by a month. See the notebook's closing section. |
+| ~~Extend the fit metrics~~ | ~~Medium~~ | Done (#18, merged). `analytics_modules/fit_metrics.py`. Add seasonal-cycle and interannual-variability scoring to `compute_fit`, the genuine gap versus ILAMB. Applies to GPP, `H2OSOI` and ET, daily and monthly. **ET decided 2026-09-04:** derive the total from `FCTR + FCEV + FGEV` at both resolutions and keep the three components alongside the total, so partitioned tower ET can be compared component-wise later. No output-configuration change; the remaining four sites run as-is. See [Goodness-of-fit evaluation](#goodness-of-fit-evaluation) below. |
 | **Phase 4: Hub 3 (Experimentation)** | High | Issue #9. **Scope grew 2026-08-26, settled 2026-09-04.** Soil parameters and PFT switching are the priority; precipitation, the one already working, is the least interesting. Jingyi confirmed the four soil parameters: sand, clay, organic matter, bedrock depth (`PCT_SAND`, `PCT_CLAY`, `ORGANIC`, `zbedrock`). All four plus `PCT_NAT_PFT` are surface-dataset edits and share an implementation path. The t-test is still net-new. Nothing waits on Jingyi. |
 | **Phase 5: sensitivity analysis** | Medium | Issue #10. **Reframed 2026-08-26** from validation to sensitivity analysis: perturbed run vs. control, measuring deviation in magnitude, lag and correlation. No tolerance needed. Uses the full 2018-2024 simulation, since it compares two model runs rather than model against observations. |
 | **Image size optimization** | Low | Investigate `--filter=blob:none` clone, BuildKit cache mounts. |
