@@ -49,6 +49,20 @@ from .observations import (
     UMOL_CO2_TO_GC,
 )
 
+# Goodness-of-fit scores that attribute a misfit (seasonal cycle, interannual
+# variability) and the derived ET variable they are applied to (#18).
+from .fit_metrics import (
+    evaluate_series,
+    evaluate_fit,
+    evaluate_pairs,
+    summarize_fit,
+    ResolutionMismatchWarning,
+)
+from .fluxes import (
+    derive_et,
+    check_et_closure,
+)
+
 # Plotting, moved out of data_access into visualization.py. Re-exported so
 # `from analytics_modules import plot_soil_profile_timeseries` keeps working.
 #

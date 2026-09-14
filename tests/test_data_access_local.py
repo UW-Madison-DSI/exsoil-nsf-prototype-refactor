@@ -270,6 +270,49 @@ class TestVariableSelection:
 
 
 @pytest.mark.tier0
+class TestDerivedVariables:
+    """`variables=["ET"]` reads the components and adds their sum (issue #18)."""
+
+    @pytest.fixture
+    def flux_run(self, tmp_path):
+        for day_index, stamp in enumerate(("2018-01-01-01800", "2018-01-02-01800")):
+            write_history_file(tmp_path, "KONZ", stamp, ["FCTR", "FCEV", "FGEV", "GPP"], day_index=day_index)
+        return tmp_path
+
+    def test_requesting_et_reads_its_components_and_derives_it(self, flux_run):
+        dataset = open_ctsm_hist("KONZ", output_root=flux_run, variables=["ET"])
+        assert {"ET", "FCTR", "FCEV", "FGEV"} <= set(dataset.data_vars)
+        assert "GPP" not in dataset.data_vars
+        expected = dataset["FCTR"] + dataset["FCEV"] + dataset["FGEV"]
+        assert (dataset["ET"] == expected).all()
+
+    def test_derived_and_plain_names_mix(self, flux_run):
+        dataset = open_ctsm_hist("KONZ", output_root=flux_run, variables=["ET", "GPP"])
+        assert {"ET", "GPP"} <= set(dataset.data_vars)
+
+    def test_missing_native_total_on_the_daily_stream_is_not_an_error(self, flux_run):
+        """EFLX_LH_TOT is optional input for ET: absent on daily files, present on monthly."""
+        dataset = open_ctsm_hist("KONZ", output_root=flux_run, variables=["ET"])
+        assert "EFLX_LH_TOT" not in dataset
+
+    def test_explicitly_requesting_the_optional_input_still_raises(self, flux_run):
+        """EFLX_LH_TOT is only exempt from the typo guard when it is pulled in
+        implicitly by expanding "ET". Naming it directly is a real request,
+        and the daily fixture does not have it, so this must raise -- a
+        regression here would let a mistyped-but-optional name through
+        silently rather than as a KeyError."""
+        with pytest.raises(KeyError, match="EFLX_LH_TOT"):
+            open_ctsm_hist("KONZ", output_root=flux_run, variables=["EFLX_LH_TOT"])
+
+    def test_naming_the_optional_input_alongside_et_still_raises(self, flux_run):
+        """Requesting ET also pulls in EFLX_LH_TOT implicitly, but naming it
+        again by hand in the same call means the caller asked for it
+        explicitly, so it must still be checked and still raise here."""
+        with pytest.raises(KeyError, match="EFLX_LH_TOT"):
+            open_ctsm_hist("KONZ", output_root=flux_run, variables=["ET", "EFLX_LH_TOT"])
+
+
+@pytest.mark.tier0
 class TestMonthLabels:
     """The monthly stream carries the month it belongs to, read from the filename.
 
