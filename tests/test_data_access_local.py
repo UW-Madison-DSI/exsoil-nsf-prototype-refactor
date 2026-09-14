@@ -295,6 +295,22 @@ class TestDerivedVariables:
         dataset = open_ctsm_hist("KONZ", output_root=flux_run, variables=["ET"])
         assert "EFLX_LH_TOT" not in dataset
 
+    def test_explicitly_requesting_the_optional_input_still_raises(self, flux_run):
+        """EFLX_LH_TOT is only exempt from the typo guard when it is pulled in
+        implicitly by expanding "ET". Naming it directly is a real request,
+        and the daily fixture does not have it, so this must raise -- a
+        regression here would let a mistyped-but-optional name through
+        silently rather than as a KeyError."""
+        with pytest.raises(KeyError, match="EFLX_LH_TOT"):
+            open_ctsm_hist("KONZ", output_root=flux_run, variables=["EFLX_LH_TOT"])
+
+    def test_naming_the_optional_input_alongside_et_still_raises(self, flux_run):
+        """Requesting ET also pulls in EFLX_LH_TOT implicitly, but naming it
+        again by hand in the same call means the caller asked for it
+        explicitly, so it must still be checked and still raise here."""
+        with pytest.raises(KeyError, match="EFLX_LH_TOT"):
+            open_ctsm_hist("KONZ", output_root=flux_run, variables=["ET", "EFLX_LH_TOT"])
+
 
 @pytest.mark.tier0
 class TestMonthLabels:

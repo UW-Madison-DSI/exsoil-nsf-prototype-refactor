@@ -56,6 +56,7 @@ from .fit_metrics import (
     evaluate_fit,
     evaluate_pairs,
     summarize_fit,
+    ResolutionMismatchWarning,
 )
 from .fluxes import (
     derive_et,

@@ -63,7 +63,7 @@ COS_ACCESS_KEY_ID / COS_SECRET_ACCESS_KEY
 import os
 import re
 import time
-from typing import Iterable, List, Optional
+from typing import Callable, Iterable, List, Optional, Set, Tuple
 from pathlib import Path
 
 import boto3
@@ -294,8 +294,9 @@ def open_ctsm_hist_from_s3(
     # means one thing regardless of which source resolves.
     variables = _as_variable_list(variables)
     to_derive = []
+    implicit_optional = set()
     if variables is not None:
-        variables, to_derive = _expand_derived(variables)
+        variables, to_derive, implicit_optional = _expand_derived(variables)
     preprocess = _select_variables(variables) if variables is not None else None
 
     start = time.time()
@@ -319,7 +320,7 @@ def open_ctsm_hist_from_s3(
 
     print(f"Reading all simulation files took: {time.time() - start:.2f} seconds.")
     if variables is not None:
-        _check_requested_variables(ds_ctsm, variables)
+        _check_requested_variables(ds_ctsm, variables, implicit_optional)
     return _apply_derived(ds_ctsm, to_derive)
 
 
@@ -440,7 +441,7 @@ def find_ctsm_hist_files(
     )
 
 
-def _as_variable_list(variables):
+def _as_variable_list(variables: Optional[Iterable[str]]) -> Optional[List[str]]:
     """Normalise a `variables` argument.
 
     A bare string is the most likely mistake -- `variables="GPP"` -- and
@@ -453,9 +454,20 @@ def _as_variable_list(variables):
     return list(variables)
 
 
-def _expand_derived(variables):
-    """Replace derived names with the file variables they need. Returns (to_read, to_derive)."""
+def _expand_derived(variables: Iterable[str]) -> Tuple[List[str], List[str], Set[str]]:
+    """Replace derived names with the file variables they need.
+
+    Returns (to_read, to_derive, implicit_optional). The third value is the
+    optional inputs pulled in only because expanding a derived variable
+    needed them -- never a name the caller listed in `variables` directly.
+    That distinction matters downstream: an optional input the reader added
+    on its own behalf is fine to find missing, but one the caller asked for
+    by name must still be checked like any other explicit request, or the
+    typo guard can be defeated by naming an optional input outright.
+    """
+    requested = set(variables)
     to_read, to_derive = [], []
+    implicit_optional = set()
     for name in variables:
         spec = DERIVED_VARIABLES.get(name)
         if spec is None:
@@ -464,16 +476,17 @@ def _expand_derived(variables):
             to_derive.append(name)
             to_read.extend(spec["inputs"])
             to_read.extend(spec["optional"])
-    return list(dict.fromkeys(to_read)), to_derive
+            implicit_optional.update(n for n in spec["optional"] if n not in requested)
+    return list(dict.fromkeys(to_read)), to_derive, implicit_optional
 
 
-def _apply_derived(dataset, to_derive):
+def _apply_derived(dataset: xr.Dataset, to_derive: Iterable[str]) -> xr.Dataset:
     for name in to_derive:
         dataset = DERIVED_VARIABLES[name]["derive"](dataset)
     return dataset
 
 
-def _select_variables(variables):
+def _select_variables(variables: Iterable[str]) -> Callable[[xr.Dataset], xr.Dataset]:
     """Build an open_mfdataset preprocess that keeps `variables` plus time bookkeeping."""
     keep = set(variables) | TIME_BOOKKEEPING
 
@@ -483,16 +496,21 @@ def _select_variables(variables):
     return _select
 
 
-def _check_requested_variables(dataset, variables) -> None:
+def _check_requested_variables(dataset: xr.Dataset, variables: Iterable[str], implicit_optional: Iterable[str] = frozenset()) -> None:
     """Raise if any requested variable matched nothing.
 
     A filter that matches nothing returns a dataset with a correct time axis
     and no data, which downstream reads as "no data for that period" rather
     than as a typo. That is the silent-empty failure this module exists to
     prevent, so it is an error.
+
+    `implicit_optional` exempts only the optional inputs `_expand_derived`
+    pulled in on its own behalf (e.g. EFLX_LH_TOT for "ET"). A name the
+    caller listed in `variables` directly is never in that set, even when it
+    is also somebody's optional input, so asking for it by name still gets
+    the typo guard.
     """
-    optional = {name for spec in DERIVED_VARIABLES.values() for name in spec["optional"]}
-    missing = sorted(set(variables) - set(dataset.variables) - optional)
+    missing = sorted(set(variables) - set(dataset.variables) - set(implicit_optional))
     if missing:
         raise KeyError(
             f"Requested variables not present in the history files: {missing}. "
@@ -587,8 +605,9 @@ def open_ctsm_hist_local(
 
     variables = _as_variable_list(variables)
     to_derive = []
+    implicit_optional = set()
     if variables is not None:
-        variables, to_derive = _expand_derived(variables)
+        variables, to_derive, implicit_optional = _expand_derived(variables)
     steps = []
     if variables is not None:
         steps.append(_select_variables(variables))
@@ -618,7 +637,7 @@ def open_ctsm_hist_local(
     )
     print(f"Reading all simulation files took: {time.time() - start:.2f} seconds.")
     if variables is not None:
-        _check_requested_variables(ds_ctsm, variables)
+        _check_requested_variables(ds_ctsm, variables, implicit_optional)
     return _apply_derived(ds_ctsm, to_derive)
 
 

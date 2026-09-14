@@ -67,16 +67,21 @@ def check_et_closure(dataset: xr.Dataset, rtol: float = 1e-4, atol: float = 1e-3
     bookkeeping is a bug, not a result.
 
     Raises KeyError when the dataset is the monthly stream (it carries the
-    reader's `month` coordinate) but the native total is missing: that means
-    it was filtered out by a `variables` selection, and silently skipping the
-    check would leave a component-sum error uncaught on the one stream that
-    can catch it. Open with `variables=ET_VARIABLES` or `variables=["ET"]`.
+    reader's `month` coordinate) but the native total is missing. The
+    monthly stream normally carries it, so this means one of two things: it
+    is genuinely absent from these files, or it was filtered out by a
+    `variables` selection. Silently skipping the check either way would
+    leave a component-sum error uncaught on the one stream that can catch
+    it, so it is an error regardless of which of the two is true. If it was
+    a selection, open with `variables=ET_VARIABLES` or `variables=["ET"]`.
     """
     if NATIVE_TOTAL not in dataset:
         if MONTHLY_MARKER in dataset.coords:
             raise KeyError(
-                f"{NATIVE_TOTAL} is not in this monthly dataset, so it was dropped by a variable "
-                f"selection. Open with variables=ET_VARIABLES (or variables=['ET']) to keep it."
+                f"{NATIVE_TOTAL} is not in this monthly dataset. The monthly stream normally "
+                "carries the native total, so it is either absent from these files or was "
+                "dropped by a variable selection; if it was a selection, open with "
+                "variables=ET_VARIABLES (or variables=['ET']) to keep it."
             )
         return None
     if ET_NAME not in dataset:

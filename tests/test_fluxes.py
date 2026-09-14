@@ -49,9 +49,12 @@ def test_daily_stream_has_nothing_to_close_against():
     assert check_et_closure(derive_et(components(with_total=False))) is None
 
 
-def test_monthly_dataset_missing_the_total_is_a_selection_error_not_a_skip():
-    """The reader marks the monthly stream with a `month` coordinate. If the
-    native total is missing there, a `variables` selection dropped it."""
+def test_monthly_dataset_missing_the_total_is_an_error_not_a_skip():
+    """The reader marks the monthly stream with a `month` coordinate. The
+    native total is normally there; if it is not, that is either because
+    these files genuinely lack it or because a `variables` selection dropped
+    it, and the message must not blame a selection that may not have
+    happened -- it names ET_VARIABLES as what to request either way."""
     monthly = components(with_total=False).assign_coords(month=("time", np.array(["2018-01"] * 6)))
     with pytest.raises(KeyError, match="ET_VARIABLES"):
         check_et_closure(derive_et(monthly))

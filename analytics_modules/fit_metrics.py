@@ -69,6 +69,12 @@ Resolution
     specific to GPP: soil water and ET go through the same path, and negative
     values are never altered.
 
+    When both inputs are sub-daily, their timestamps are rounded to the
+    nearest minute before intersecting, because CTSM's float32 `time` and
+    NEON's per-month float epoch both decode with sub-second drift that would
+    otherwise leave a half-hourly model series and a half-hourly observation
+    series sharing almost no exact stamps.
+
 Small samples
     Zero shared timestamps is an error, not an all-NaN result: it means the
     join failed. Correlation needs at least three pairs and is NaN below that,
@@ -93,7 +99,11 @@ SeriesLike = Union[pd.Series, xr.DataArray, np.ndarray, list]
 CADENCE_ORDER = ("sub-daily", "daily", "monthly")
 
 
-def _to_datetime_index(index) -> pd.DatetimeIndex:
+class ResolutionMismatchWarning(UserWarning):
+    """One series was averaged to the other's coarser cadence before scoring."""
+
+
+def _to_datetime_index(index: pd.Index) -> pd.DatetimeIndex:
     """Accept DatetimeIndex, PeriodIndex or CFTimeIndex. Refuse everything else."""
     if isinstance(index, pd.DatetimeIndex):
         return index
@@ -148,12 +158,34 @@ def infer_resolution(index: pd.DatetimeIndex) -> str:
 
 
 def _to_resolution(series: pd.Series, resolution: str) -> pd.Series:
-    """Average a series onto month-start or day-start stamps. Monthly stamps mid-month move to month start."""
+    """Average a series onto month-start or day-start stamps, or round sub-daily stamps to the nearest minute.
+
+    Monthly stamps mid-month move to month start. Sub-daily stamps are rounded
+    to the nearest minute rather than averaged, because both a model series
+    and an observation series sit on a half-hourly grid but CTSM writes `time`
+    as float32 days-since, which decodes with sub-second drift (a stamp meant
+    to be 2018-01-01T00:30:00 decodes as ...T00:30:00.000053644); NEON's
+    half-hourly files carry their own independent drift. One minute is far
+    below the smallest real spacing (30 minutes) and far above that drift.
+    Data genuinely finer than one-minute resolution is out of scope: if
+    rounding collapses two distinct stamps into one, that is a real duplicate
+    and is raised as such below.
+    """
     if resolution == "monthly":
         return series.resample("MS").mean().dropna()
     if resolution == "daily":
         return series.resample("D").mean().dropna()
-    return series
+    rounded = series.copy()
+    rounded.index = rounded.index.round("min")
+    duplicates = int(rounded.index.duplicated().sum())
+    if duplicates:
+        raise ValueError(
+            f"{duplicates} duplicate timestamp(s) after rounding sub-daily stamps to the "
+            "nearest minute. That means two distinct stamps were within a minute of each "
+            "other, which is finer than this module scores; aggregate to at least "
+            "one-minute spacing first."
+        )
+    return rounded
 
 
 def _pearson(a: np.ndarray, b: np.ndarray) -> float:
@@ -289,26 +321,47 @@ def evaluate_series(
         warnings.warn(
             f"observations are {res_obs} and simulations are {res_sim}; averaging the "
             f"{resampled} series to {resolution} before scoring",
+            ResolutionMismatchWarning,
             stacklevel=2,
         )
     if resolution == "monthly":
         # month-start stamps for both, so mid-month observation stamps still align
         obs_s, sim_s = _to_resolution(obs_s, "monthly"), _to_resolution(sim_s, "monthly")
+    elif resolution == "sub-daily":
+        # both series are sub-daily here (resolution is the coarser of the two);
+        # round both onto the same one-minute grid so float32 decode drift does
+        # not make two half-hourly series miss each other entirely (see
+        # _to_resolution)
+        obs_s, sim_s = _to_resolution(obs_s, "sub-daily"), _to_resolution(sim_s, "sub-daily")
     elif res_obs != res_sim:
         obs_s, sim_s = _to_resolution(obs_s, resolution), _to_resolution(sim_s, resolution)
 
     common = obs_s.index.intersection(sim_s.index)
-    if len(common) == 0:
-        raise ValueError(
-            f"no shared timestamps between observations ({obs_s.index.min()} to "
-            f"{obs_s.index.max()}) and simulations ({sim_s.index.min()} to {sim_s.index.max()})"
-        )
+    obs_bounds = (obs_s.index.min(), obs_s.index.max())
+    sim_bounds = (sim_s.index.min(), sim_s.index.max())
     obs_s, sim_s = obs_s.reindex(common), sim_s.reindex(common)
+    # DatetimeIndex.intersection takes a range-based shortcut when both indexes
+    # carry the same inferred freq (e.g. two daily series stamped at different
+    # times of day), and that shortcut can hand back labels that are not
+    # actually present in both indexes. Reindexing onto those labels fills the
+    # gaps with NaN; drop them before checking for an empty join, or the guard
+    # below never fires and a mismatched pair scores as an all-NaN "fit".
+    paired = obs_s.notna() & sim_s.notna()
+    obs_s, sim_s = obs_s[paired], sim_s[paired]
+    if len(obs_s) == 0:
+        raise ValueError(
+            f"no shared timestamps between observations ({obs_bounds[0]} to "
+            f"{obs_bounds[1]}) and simulations ({sim_bounds[0]} to {sim_bounds[1]})"
+        )
 
     r = _pearson(obs_s.to_numpy(), sim_s.to_numpy())
     obs_m, sim_m = monthly_means(obs_s), monthly_means(sim_s)
     shared_months = obs_m.index.intersection(sim_m.index)
     obs_m, sim_m = obs_m.reindex(shared_months), sim_m.reindex(shared_months)
+    # obs_m and sim_m are resampled independently and can diverge, so the same
+    # fast-path hazard applies here as above.
+    paired_months = obs_m.notna() & sim_m.notna()
+    obs_m, sim_m = obs_m[paired_months], sim_m[paired_months]
     magnitude = magnitude_metrics(obs_m.to_numpy(), sim_m.to_numpy())
 
     out: Dict[str, object] = {

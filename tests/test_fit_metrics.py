@@ -8,7 +8,9 @@ on values, not on "it returned a number".
 """
 
 import math
+import os
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -16,6 +18,7 @@ import pytest
 import xarray as xr
 
 from analytics_modules.fit_metrics import (
+    ResolutionMismatchWarning,
     evaluate_fit,
     evaluate_pairs,
     evaluate_series,
@@ -26,6 +29,12 @@ from analytics_modules.fit_metrics import (
 from analytics_modules.neon_eval_utils import compute_fit
 
 pytestmark = pytest.mark.tier0
+
+REFERENCE_ROOT = os.getenv("CTSM_TEST_REFERENCE_ROOT", str(Path(__file__).resolve().parents[1]))
+requires_reference = pytest.mark.skipif(
+    not list(Path(REFERENCE_ROOT).glob("reference-output/*/lnd/hist")),
+    reason="reference copies not staged (see tests/fixtures/reference_output/README.md)",
+)
 
 
 def monthly_index(years: int, start: str = "2018-01-01") -> pd.DatetimeIndex:
@@ -174,7 +183,7 @@ class TestResolution:
         rng = np.random.default_rng(3)
         sim = pd.Series(5 + np.cos(2 * np.pi * (idx.dayofyear - 200) / 365) + rng.normal(0, 0.5, len(idx)), index=idx)
         obs = sim.resample("MS").mean()
-        with pytest.warns(UserWarning, match="averaging the sim series to monthly"):
+        with pytest.warns(ResolutionMismatchWarning, match="averaging the sim series to monthly"):
             m = evaluate_series(obs, sim)
         assert m["resolution"] == "monthly"
         assert m["resampled"] == "sim"
@@ -189,6 +198,76 @@ class TestResolution:
             warnings.simplefilter("error")
             m = evaluate_series(seasonal(idx), seasonal(idx))
         assert m["resampled"] is None
+
+
+class TestSubDailyFloatDrift:
+    """CTSM writes `time` as float32 days-since, which decodes with sub-second drift
+    (verified against reference-output/KONZ.transient.../h1.2020-05-29...nc: a nominal
+    00:30:00 stamp decodes as 00:30:00.000053644). NEON's half-hourly files carry their
+    own independent per-month float epoch. Two half-hourly series intersected on exact
+    timestamps therefore share almost no stamps at all; probed at n=1 out of 1344."""
+
+    def test_half_hourly_series_with_independent_drift_still_align(self):
+        """A perfect model, jittered by independent sub-millisecond drift on each side,
+        must still score every step. Without rounding to the nearest minute this
+        collapses to n=1 (one lucky exact match) and R2 comes back nan."""
+        idx = pd.date_range("2018-01-01", periods=7 * 48, freq="30min")
+        values = 5.0 + np.cos(2 * np.pi * np.arange(len(idx)) / 48)
+        rng = np.random.default_rng(11)
+        obs_drift = pd.to_timedelta(rng.uniform(0, 150), unit="us")   # microsecond jitter
+        sim_drift = pd.to_timedelta(rng.uniform(0, 150), unit="us")   # independent jitter
+        obs = pd.Series(values, index=idx + obs_drift)
+        sim = pd.Series(values.copy(), index=idx + sim_drift)
+        m = evaluate_series(obs, sim)
+        assert m["n"] == len(idx)
+        assert m["R2"] == pytest.approx(1.0)
+
+    def test_clean_half_hourly_data_is_unaffected_by_rounding(self):
+        """No drift at all: rounding to the nearest minute must be a no-op."""
+        idx = pd.date_range("2018-01-01", periods=200, freq="30min")
+        values = 5.0 + np.cos(2 * np.pi * np.arange(len(idx)) / 48)
+        obs = pd.Series(values, index=idx)
+        sim = pd.Series(values * 1.2 - 0.4, index=idx)
+        m = evaluate_series(obs, sim)
+        assert m["n"] == 200
+        assert m["R2"] == pytest.approx(1.0)
+        assert m["Bias"] == pytest.approx(float((sim - obs).mean()))
+
+
+class TestIntersectionFastPath:
+    """pandas' DatetimeIndex.intersection takes a range-based shortcut when both
+    indexes carry the same inferred freq, and that shortcut can hand back labels
+    absent from one of the two indexes (verified: two daily series, 400 points
+    each, one stamped 00:00 and one stamped 12:00, true intersection 0 but
+    `len(common)` came back 399)."""
+
+    def test_same_cadence_different_time_of_day_raises_no_shared_timestamps(self):
+        idx = pd.date_range("2018-01-01", periods=400, freq="D")
+        obs = pd.Series(np.arange(400.0), index=idx)
+        sim = pd.Series(np.arange(400.0), index=idx + pd.Timedelta(hours=12))
+        # must be the "no shared timestamps" join failure, not the downstream
+        # "no observation/simulation pairs to score" from an all-NaN reindex
+        with pytest.raises(ValueError, match="no shared timestamps"):
+            evaluate_series(obs, sim)
+
+
+@requires_reference
+class TestRealSubDailyData:
+    """Smoke test against the actual h1 reference file the drift numbers above were
+    measured from. The synthetic tests carry the real coverage; this only confirms
+    the rounding path does not choke on real float32-decoded stamps."""
+
+    def test_reference_h1_file_self_comparison_scores_perfectly(self):
+        path = Path(REFERENCE_ROOT) / (
+            "reference-output/KONZ.transient/lnd/hist/"
+            "KONZ.transient.clm2.h1.2020-05-29-00000.nc"
+        )
+        ds = xr.open_dataset(path)
+        gpp = ds["FCTR"].isel(lndgrid=0)
+        assert infer_resolution(gpp.indexes["time"]) == "sub-daily"
+        m = evaluate_series(gpp, gpp.copy())
+        assert m["n"] == gpp.sizes["time"]
+        assert m["R2"] == pytest.approx(1.0)
 
 
 class TestMonthlyTimestamps:
